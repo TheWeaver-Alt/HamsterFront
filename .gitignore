@@ -5,3 +5,17 @@
 *.tmp
 /screenshots/
 /builds/
+
+# secrets
+.env
+.env.*
+!.env.example
+client_secret*.json
+credentials.json
+token.json
+oauth.json
+*.pem
+*.key
+
+# per-machine Claude Code settings
+.claude/settings.local.json

@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash tools/check.sh)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write|NotebookEdit|Grep|Glob|Bash|PowerShell|mcp__.*(browser|Browser|playwright|chrome|computer).*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"C:/HamsterFront/.claude/hooks/guard_private.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking this is not private material..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"C:/HamsterFront/.claude/hooks/state_sync.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking the project state is in step..."
+          }
+        ]
+      }
+    ]
+  }
+}

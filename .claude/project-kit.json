@@ -1,0 +1,38 @@
+{
+  "kit": "1.0.0",
+  "name": "HamsterFront",
+  "tagline": "Defence of Hamsterland: Mech-Pouch Protocol. A 2D top-down action tower defense roguelite for 1-2 players (local co-op), built in Godot 4 with GDScript.",
+  "modules": [],
+  "docs": {
+    "rules": "AGENTS.md",
+    "rules_pointer": "CLAUDE.md",
+    "readme": "README.md",
+    "product": "PRODUCT.md",
+    "state": "docs/PROJECT-STATE.md",
+    "architecture": "docs/ARCHITECTURE.md",
+    "decisions": "docs/adr",
+    "design": "DESIGN.md"
+  },
+  "checks": [
+    {
+      "name": "smoke",
+      "run": "bash tools/check.sh"
+    }
+  ],
+  "dev": null,
+  "test_origins": [],
+  "never_open": [],
+  "private": [],
+  "source_dirs": [
+    "autoloads",
+    "scenes",
+    "scripts",
+    "shaders",
+    "tools",
+    ".claude"
+  ],
+  "guard": "kit",
+  "state_hook": "kit",
+  "exceptions": {},
+  "aligned": "2026-11-02"
+}

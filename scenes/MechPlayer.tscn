@@ -1,0 +1,25 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/entities/MechPlayer.gd" id="1_mech"]
+[ext_resource type="Script" path="res://scripts/components/CheekPouchComponent.gd" id="2_pouch"]
+[ext_resource type="Script" path="res://scripts/components/WheelHeatComponent.gd" id="3_wheel"]
+[ext_resource type="Script" path="res://scripts/components/WeaponMount.gd" id="4_weapon"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_mech"]
+radius = 6.0
+
+[node name="MechPlayer" type="CharacterBody2D"]
+motion_mode = 1
+script = ExtResource("1_mech")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_mech")
+
+[node name="CheekPouchComponent" type="Node" parent="."]
+script = ExtResource("2_pouch")
+
+[node name="WheelHeatComponent" type="Node" parent="."]
+script = ExtResource("3_wheel")
+
+[node name="WeaponMount" type="Node2D" parent="."]
+script = ExtResource("4_weapon")

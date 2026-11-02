@@ -1,0 +1,49 @@
+# Architecture
+
+Godot 4.3+, GDScript, GL Compatibility renderer. Base viewport 640x360, `canvas_items` stretch with integer scaling to 1920x1080, nearest filtering, 2D transform snapping.
+
+**No image or audio assets are stored in the repo.** All pixel art is painted procedurally into `Image`s at startup (`scripts/art/*`). All sound is synthesized into `AudioStreamWAV`s (`autoloads/Sfx.gd`). The pixel font is a 3x5 bitmap `FontFile` built in code.
+
+## Autoloads (`/autoloads`)
+
+| Singleton | Role |
+|---|---|
+| `PixelArt` | Palette `C`, raster helpers (`disk`, `rect`, `line`, `outline`, `from_ascii`, `stamp_text`), named-texture cache `tex(name)`, the pixel `font`, canvas helpers `draw_text*`, `draw_bar`, `draw_box`, `draw_disk`, `make_flash_material()` |
+| `Sfx` | Procedural 8-bit sounds. `Sfx.play(name, pitch, db)`, `Sfx.play_var(name, pitch, variance, db)` |
+| `GameManager` | Wave, Silo HP, banked seeds, phase (`title/build/wave/draft/gameover`), player devices, global `gstats` (`StatBlock`), `TOWER_INFO`, `arena` + `players` refs |
+| `CardDB` | All upgrade cards, weighted `roll_hand()`, `apply_card()` |
+| `JuiceManager` | Hit-stop (`Engine.time_scale`), camera trauma shake, pooled speech-bubble `bark()`s, screen flash |
+
+## Scenes (`/scenes`)
+
+- `TitleScreen.tscn` — join screen (any device presses confirm; P1 confirms again to start).
+- `MainArena.tscn` — `TileMapLayer` ground, `World` (y-sorted entities), managers, camera, `HUDLayer`, `DraftLayer`, `OverlayLayer`.
+- `MechPlayer.tscn` — `CharacterBody2D` + `CheekPouchComponent`, `WheelHeatComponent`, `WeaponMount`, `Visual`, `Overlay`.
+- `RatEnemy.tscn` — `CharacterBody2D`; behaviour from a `RatBrain` in `scripts/enemies/brains/<Kind>Brain.gd`.
+- `TowerBase.tscn` — `StaticBody2D` + `Range` (`Area2D`) + `OverchargeTimer`; behaviour from a `TowerBrain` in `scripts/towers/brains/<Kind>Brain.gd`.
+
+## Arena systems (`scripts/arena`, `scripts/systems`)
+
+- `ArenaMap` — 40x22 cell grid, pads, burrows, obstacles; Dijkstra **flow field** to the Silo (`flow_waypoint(pos)`, `dist_at(pos)`).
+- `MainArena` — enemy registry + 32px **spatial hash** (`enemies_in_radius`, `nearest_enemy`), tower building (`try_build`, `try_upgrade`, `free_pad_near`, `tower_near`, `taunting_decoy`), phase loop, co-op synergies, pause/game over.
+- `ShotManager` — every projectile as plain data; `fire(pos, vel, dmg, opts)` and `lob(from, to, dur, height, kind, on_land, opts)`. Team 0 hits rats, team 1 hits mechs/towers/Silo.
+- `SeedManager` — dropped seeds that pop, bounce and get vacuumed into cheek pouches.
+- `HazardManager` — shell piles (slow), fire (burn rats), gas (hurt mechs, corrode towers), cosmetic decals.
+- `FxManager` — batched pixel particles, muzzle flashes, rings, lightning bolts, beams, floating text.
+- `WaveSpawner` — scaling rosters, burrow telegraphs, pack spawning.
+
+## Stats & cards
+
+`StatBlock`: `final = (base + Σadd) × Πmul`, plus flags. Each mech has `stats`; the team/towers share `GameManager.gstats`. A card's `mods` go to the picking player, `gmods` to `gstats`. See the header of `autoloads/CardDB.gd` for every key.
+
+## Damage interfaces
+
+- Rat: `take_damage(amount, from_pos, knockback, info)` — `info` keys: `owner`, `kind`, `burn`, `stun`, `melt`, `quiet`, `friendly`.
+- Mech: `take_damage(amount, from_pos, quiet := false)`.
+- Tower: `take_damage(amount, source)`, `corrode(dt)`, `overcharge(seeds, by)`.
+- Silo: `GameManager.damage_silo(amount)` + `arena.on_silo_hit(pos)`.
+
+## Dev tools (`/tools`)
+
+- `ArtPreview.tscn` — renders every sprite + font sample to `screenshots/art_preview.png`.
+- `SmokeTest.tscn` — two bot pilots play N waves: `godot --path . res://tools/SmokeTest.tscn -- --waves=4 --speed=3 [--shots] [--spawn-all]`.

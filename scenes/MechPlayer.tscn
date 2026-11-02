@@ -1,0 +1,35 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/mech/MechPlayer.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/mech/CheekPouchComponent.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/mech/WheelHeatComponent.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/mech/WeaponMount.gd" id="4"]
+[ext_resource type="Script" path="res://scripts/mech/MechVisual.gd" id="5"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 6.0
+
+[node name="MechPlayer" type="CharacterBody2D"]
+motion_mode = 1
+script = ExtResource("1")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -3)
+shape = SubResource("CircleShape2D_body")
+
+[node name="CheekPouchComponent" type="Node" parent="."]
+script = ExtResource("2")
+
+[node name="WheelHeatComponent" type="Node" parent="."]
+script = ExtResource("3")
+
+[node name="Visual" type="Node2D" parent="."]
+position = Vector2(0, -12)
+script = ExtResource("5")
+
+[node name="WeaponMount" type="Node2D" parent="."]
+position = Vector2(0, -14)
+script = ExtResource("4")
+
+[node name="Overlay" type="Node2D" parent="."]
+z_index = 100

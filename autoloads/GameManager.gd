@@ -1,0 +1,193 @@
+extends Node
+## GameManager — run state: wave, Silo HP, banked seeds, phase, players, global modifiers.
+
+signal seeds_changed(amount: int)
+signal silo_changed(hp: float, max_hp: float)
+signal wave_changed(wave: int)
+signal phase_changed(phase: String)
+signal announce(text: String, sub: String, color: Color)
+signal game_over_triggered
+
+const TILE := 16
+const MAP_W := 40
+const MAP_H := 22
+
+# Collision layer bits
+const L_WORLD := 1
+const L_RAT_BLOCK := 2
+const L_PLAYERS := 4
+const L_ENEMIES := 8
+const L_TOWERS := 16
+
+const TOWER_TYPES := ["gatling", "laser", "mortar", "tesla", "decoy"]
+const TOWER_INFO := {
+	"gatling": {"name": "SUNFLOWER GATLING", "short": "GATLING", "cost": 30, "hp": 120.0, "range": 92.0,
+		"desc": "RAPID HULL SPITTER. SHELL PILES SLOW RATS."},
+	"laser": {"name": "WATER-BOTTLE LASER", "short": "LASER", "cost": 50, "hp": 100.0, "range": 112.0,
+		"desc": "CONTINUOUS ARMOR-MELTING SUNBEAM."},
+	"mortar": {"name": "CEDAR-SHAVING MORTAR", "short": "MORTAR", "cost": 60, "hp": 110.0, "range": 176.0,
+		"desc": "LOBS SNEEZING POWDER. STUNS PACKS."},
+	"tesla": {"name": "EXERCISE-WHEEL TESLA", "short": "TESLA", "cost": 70, "hp": 130.0, "range": 76.0,
+		"desc": "CHAIN LIGHTNING. RUN NEXT TO IT TO SPIN IT FASTER."},
+	"decoy": {"name": "CARDBOARD DECOY HAMSTER", "short": "DECOY", "cost": 20, "hp": 180.0, "range": 88.0,
+		"desc": "GOOGLY-EYED CUTOUT. TAUNTS RATS."},
+}
+const MAX_TOWER_LEVEL := 3
+
+# --- persistent between runs (title screen settings)
+var num_players: int = 1
+var player_devices: Array = ["kbm", "pad0"]
+var p1_chassis: String = "brawler"
+
+# --- run state
+var wave: int = 0
+var silo_hp: float = 1500.0
+var silo_max_hp: float = 1500.0
+var seeds: int = 0
+var phase: String = "title"          # title | build | wave | draft | gameover
+var run_active: bool = false
+var kills: int = 0
+var seeds_banked_total: int = 0
+var run_time: float = 0.0
+var gstats: StatBlock
+var owned_cards: Dictionary = {}     # card id -> times taken (any player)
+
+# --- live references (set by MainArena)
+var arena = null   # MainArena (untyped: accessed dynamically)
+var players: Array = []
+
+
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	gstats = _make_gstats()
+
+
+func _make_gstats() -> StatBlock:
+	return StatBlock.new({
+		"tower_cost_mult": 1.0, "tower_damage_mult": 1.0, "tower_fire_rate_mult": 1.0,
+		"tower_hp_mult": 1.0, "tower_damage_taken_mult": 1.0, "tower_range_mult": 1.0,
+		"overdrive_duration": 10.0, "mortar_radius_mult": 1.0, "mortar_stun_bonus": 0.0,
+		"tesla_chain_bonus": 0.0, "shell_slow_mult": 1.0, "shell_life_mult": 1.0,
+		"decoy_hp_mult": 1.0, "tower_wave_repair": 0.0, "laser_beams": 1.0,
+	})
+
+
+func new_run() -> void:
+	wave = 0
+	silo_max_hp = 1500.0
+	silo_hp = silo_max_hp
+	seeds = 90
+	kills = 0
+	seeds_banked_total = 0
+	run_time = 0.0
+	owned_cards.clear()
+	gstats = _make_gstats()
+	players.clear()
+	run_active = true
+	set_phase("build")
+	seeds_changed.emit(seeds)
+	silo_changed.emit(silo_hp, silo_max_hp)
+
+
+func _process(delta: float) -> void:
+	if run_active and phase != "draft" and phase != "gameover" and not get_tree().paused:
+		run_time += delta
+
+
+func set_phase(p: String) -> void:
+	phase = p
+	phase_changed.emit(p)
+
+
+func is_coop() -> bool:
+	return num_players >= 2
+
+
+# ------------------------------------------------------------------ economy
+
+func tower_cost(kind: String, level: int = 1) -> int:
+	var base: float = TOWER_INFO[kind]["cost"]
+	var mult := gstats.g("tower_cost_mult", 1.0)
+	if level <= 1:
+		return maxi(1, int(roundf(base * mult)))
+	return maxi(1, int(roundf(base * 0.75 * (level - 1) * mult)))
+
+
+func add_seeds(n: int) -> void:
+	seeds += n
+	if n > 0:
+		seeds_banked_total += n
+	seeds_changed.emit(seeds)
+
+
+func can_afford(n: int) -> bool:
+	return seeds >= n
+
+
+func spend(n: int) -> bool:
+	if seeds < n:
+		return false
+	seeds -= n
+	seeds_changed.emit(seeds)
+	return true
+
+
+# ------------------------------------------------------------------ silo
+
+func damage_silo(amount: float) -> void:
+	if phase == "gameover" or not run_active:
+		return
+	silo_hp = maxf(0.0, silo_hp - amount)
+	silo_changed.emit(silo_hp, silo_max_hp)
+	if silo_hp <= 0.0:
+		trigger_game_over()
+
+
+func heal_silo(amount: float) -> void:
+	silo_hp = minf(silo_max_hp, silo_hp + amount)
+	silo_changed.emit(silo_hp, silo_max_hp)
+
+
+func trigger_game_over() -> void:
+	if phase == "gameover":
+		return
+	run_active = false
+	set_phase("gameover")
+	game_over_triggered.emit()
+
+
+func say(text: String, sub: String = "", color: Color = Color8(255, 214, 64)) -> void:
+	announce.emit(text, sub, color)
+
+
+# ------------------------------------------------------------------ helpers
+
+func living_players() -> Array:
+	var out: Array = []
+	for p in players:
+		if is_instance_valid(p) and not p.downed:
+			out.append(p)
+	return out
+
+
+func nearest_player(pos: Vector2, max_dist: float = INF, include_downed: bool = false) -> Node2D:
+	var best: Node2D = null
+	var bd := max_dist
+	for p in players:
+		if not is_instance_valid(p):
+			continue
+		if p.downed and not include_downed:
+			continue
+		var d: float = pos.distance_to(p.global_position)
+		if d < bd:
+			bd = d
+			best = p
+	return best
+
+
+static func tile_center(cell: Vector2i) -> Vector2:
+	return Vector2(cell.x * TILE + TILE / 2.0, cell.y * TILE + TILE / 2.0)
+
+
+static func world_to_cell(pos: Vector2) -> Vector2i:
+	return Vector2i(floori(pos.x / TILE), floori(pos.y / TILE))

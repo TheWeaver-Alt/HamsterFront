@@ -275,7 +275,7 @@ func spawn_rat(kind: String, pos: Vector2, hp_mult: float = 1.0, spd_mult: float
 	var r = RatScene.instantiate()
 	r.setup(kind, hp_mult, spd_mult)
 	r.position = pos
-	r.spawn_t = 0.3
+	r.spawn_t = 0.5   # long enough to see the crawl-out animation
 	world.add_child(r)
 	register_enemy(r)
 	if r.is_boss:

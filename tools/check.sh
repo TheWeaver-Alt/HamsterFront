@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Headless check: import the project, then run the bot playtest (tools/SmokeTest.tscn).
 # Fails when Godot exits non-zero, the playtest never prints its DONE line, or either log has an ERROR.
-# Usage: bash tools/check.sh [smoke args...]   (default: --waves=5 --speed=4 --spawn-all)
+# Usage: bash tools/check.sh [smoke args...]   (default: --waves=5 --speed=4 --spawn-all --lob-free)
 # Set GODOT to the Godot 4 binary when it isn't on PATH as godot, godot4 or Godot_v4*.
 set -u
 cd "$(dirname "$0")/.."
@@ -23,7 +23,7 @@ if [ -z "$GODOT_BIN" ]; then
 	echo "check: Godot 4 not found. Install it or set GODOT=/path/to/godot." >&2
 	exit 2
 fi
-[ $# -eq 0 ] && set -- --waves=5 --speed=4 --spawn-all
+[ $# -eq 0 ] && set -- --waves=5 --speed=4 --spawn-all --lob-free
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 ERR='^(SCRIPT )?ERROR:'

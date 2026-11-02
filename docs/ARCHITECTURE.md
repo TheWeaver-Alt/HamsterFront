@@ -53,4 +53,4 @@ Godot 4.3+, GDScript, GL Compatibility renderer. Base viewport 640x360, `canvas_
 ## Dev tools (`/tools`)
 
 - `ArtPreview.tscn` — renders every sprite + font sample to `screenshots/art_preview.png`.
-- `SmokeTest.tscn` — two bot pilots play N waves: `godot --path . res://tools/SmokeTest.tscn -- --waves=4 --speed=3 [--shots] [--spawn-all]`.
+- `SmokeTest.tscn` — two bot pilots play N waves: `godot --path . res://tools/SmokeTest.tscn -- --waves=4 --speed=3 [--shots] [--spawn-all] [--lob-free]`. `--lob-free` fires a mortar shell and destroys its tower mid-flight (regression for a freed lambda capture). `bash tools/check.sh` wraps import plus this run and fails on any `ERROR:` line.

@@ -86,7 +86,9 @@ func _fire(target) -> void:
 	var radius := BASE_RADIUS * GameManager.gstats.g("mortar_radius_mult", 1.0) * (1.0 + 0.1 * (tower.level - 1))
 	var dmg := BASE_DAMAGE * tower.damage_mult()
 	var stun := BASE_STUN + GameManager.gstats.g("mortar_stun_bonus", 0.0)
-	var owner_ref = tower
+	# a WeakRef, not the tower: the tower can die while the shell is in flight, and calling a
+	# lambda whose captured node was freed logs an engine error
+	var owner_ref: WeakRef = weakref(tower)
 	for s in shots:
 		var land_pos: Vector2 = s
 		arena.shots.lob(from, land_pos, flight, 50.0 + dist * 0.15, "mortar",
@@ -100,13 +102,14 @@ func _fire(target) -> void:
 	Sfx.play_var("mortar_fire", 1.0, 0.08, -4.0)
 
 
-func _land(pos: Vector2, radius: float, dmg: float, stun: float, owner_ref) -> void:
+func _land(pos: Vector2, radius: float, dmg: float, stun: float, owner_ref: WeakRef) -> void:
 	var arena = GameManager.arena
 	if arena == null:
 		return
 	var info := {"stun": stun, "kind": "mortar"}
-	if is_instance_valid(owner_ref):
-		info["owner"] = owner_ref
+	var owner_node = owner_ref.get_ref()
+	if owner_node != null:
+		info["owner"] = owner_node
 	for e in arena.enemies_in_radius(pos, radius):
 		if is_instance_valid(e) and e.alive:
 			var falloff := 1.0 - 0.4 * clampf(pos.distance_to(e.global_position) / radius, 0.0, 1.0)

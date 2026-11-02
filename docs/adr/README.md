@@ -6,3 +6,4 @@ successor. New ADRs start from [0000-template.md](0000-template.md) (or the `/ad
 | ADR | Decision | Status |
 |---|---|---|
 | [0001](0001-godot-4-and-procedural-assets.md) | Godot 4 with GDScript, and every asset generated in code | Accepted |
+| [0002](0002-silo-hp-and-seed-store.md) | The Silo keeps its HP and gains a seed store; seeds are the universal currency | Accepted |

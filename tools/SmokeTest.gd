@@ -2,7 +2,7 @@ extends Node
 ## Automated playtest: two bot pilots defend the Silo through several waves, building towers,
 ## banking/cramming seeds, spitting, sprinting into overheat and drafting cards.
 ## Usage:
-##   godot --path . res://tools/SmokeTest.tscn -- --waves=4 --speed=3 [--shots] [--spawn-all]
+##   godot --path . res://tools/SmokeTest.tscn -- --waves=4 --speed=3 [--shots] [--spawn-all] [--lob-free]
 ## Prints a summary; screenshots go to res://screenshots/ when --shots is given (needs a GPU/Xvfb).
 
 const ArenaScene := preload("res://scenes/MainArena.tscn")
@@ -12,6 +12,9 @@ var waves_target := 3
 var speed := 3.0
 var take_shots := false
 var spawn_all := false
+var lob_free := false
+var _lob_stage := 0
+var _lob_rat = null
 var stress := 0
 var _hops := 0
 var _was_hopping: Dictionary = {}
@@ -40,6 +43,8 @@ func _ready() -> void:
 		elif a.begins_with("--learning="):
 			var lv := int(a.get_slice("=", 1))
 			GameManager.learning_levels = [lv, lv]
+		elif a == "--lob-free":
+			lob_free = true
 		elif a == "--kid":
 			GameManager.difficulty = "kid"
 		elif a.begins_with("--stress="):
@@ -82,6 +87,8 @@ func _physics_process(delta: float) -> void:
 	if spawn_all and frame == 90:
 		for k in ["squeaker", "jezzail", "monk", "roomba", "ogre"]:
 			arena.spawn_rat(k, ArenaMap.cell_center(ArenaMap.BURROWS[0]) + Vector2(randf_range(-6, 6), 0), 1.0, 1.0)
+	if lob_free:
+		_lob_free_step()
 	if GameManager.phase == "gameover" or GameManager.wave > waves_target or t > 60.0 * waves_target + 60.0:
 		_finish()
 
@@ -197,7 +204,41 @@ func _nearest_free_pad(pos: Vector2) -> Vector2i:
 	return best
 
 
+## Regression for "Lambda capture ... was freed" (--lob-free): a mortar shell is in flight when
+## its tower dies. Stage 0 builds a mortar and fires it at a rat, then destroys the tower;
+## stage 1 waits for the shell to land (a freed capture logs an ERROR, which tools/check.sh fails on).
+func _lob_free_step() -> void:
+	if _lob_stage == 0 and GameManager.phase == "build" and frame >= 100:
+		_lob_stage = 3
+		var cell := _nearest_free_pad(ArenaMap.SILO_CENTER)
+		if cell == Vector2i(-1, -1) or not arena.try_build(GameManager.players[0], cell, "mortar"):
+			push_error("lob-free: could not build a mortar")
+			return
+		var tower = arena.pad_towers[cell]
+		_lob_rat = arena.spawn_rat("squeaker", tower.global_position + Vector2(48, 0), 1.0, 0.01)
+		tower.brain._fire(_lob_rat)
+		if not _mortar_in_flight():
+			push_error("lob-free: the mortar did not fire")
+			return
+		tower.destroy()
+		_lob_stage = 1
+	elif _lob_stage == 1 and not _mortar_in_flight():
+		if is_instance_valid(_lob_rat):
+			_lob_rat.take_damage(9999.0, _lob_rat.global_position, 0.0, {})
+		print("[smoke] lob-free: mortar shell landed after its tower was destroyed")
+		_lob_stage = 2
+
+
+func _mortar_in_flight() -> bool:
+	for s in arena.shots.shots:
+		if s.lob and s.kind == "mortar":
+			return true
+	return false
+
+
 func _finish() -> void:
+	if lob_free and _lob_stage != 2:
+		push_error("lob-free: the check did not complete (stage %d)" % _lob_stage)
 	set_physics_process(false)
 	Engine.time_scale = 1.0
 	if take_shots:

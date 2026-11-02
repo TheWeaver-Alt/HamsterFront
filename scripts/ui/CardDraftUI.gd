@@ -537,7 +537,7 @@ func _draw() -> void:
 		PixelArt.draw_text_centered(self, Vector2(320, 300), title, PixelArt.C["y"] if int(_age * 2.0) % 2 == 0 else PixelArt.C["w"], true, 6)
 	elif _state == S.DROP or _state == S.DISPENSE:
 		var a := clampf(_age / 0.3, 0.0, 1.0)
-		PixelArt.draw_text_centered(self, Vector2(320, 126), "TIME FREEZES...", Color(0.75, 0.9, 1.0, a), true, 12)
+		UiText.outlined_centered(self, Vector2(320, 126), "TIME FREEZES...", Color(0.75, 0.9, 1.0, a), 12)
 	if _state == S.LEAVE:
 		return
 	# cards: non-cursor first, then cursor cards, then chosen

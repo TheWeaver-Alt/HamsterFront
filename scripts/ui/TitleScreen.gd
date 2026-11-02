@@ -72,6 +72,9 @@ func _ready() -> void:
 				n = int(a.get_slice("=", 1))
 			slots = ["kbm", "kb2"].slice(0, n)
 			learn = [0, 0].slice(0, n)
+			inputs.clear()
+			for dev in slots:
+				inputs.append(PlayerInput.new(dev))
 			_start.call_deferred()
 
 

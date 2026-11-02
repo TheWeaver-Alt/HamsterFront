@@ -428,8 +428,8 @@ func _draw_announcement() -> void:
 	var tp := Vector2(320 + slide, band_y + 6)
 	# chunky drop shadow, then the outlined headline
 	PixelArt.draw_text_centered(self, (tp + Vector2(2, 3)).round(), _announce_text, Color(0.05, 0.03, 0.07, 0.7 * a), false, 18)
-	PixelArt.draw_text_centered(self, tp.round(), _announce_text, col, true, 18)
+	UiText.outlined_centered(self, tp.round(), _announce_text, col, 18)
 	if _announce_sub != "":
 		var sc := PixelArt.C["w"]
 		sc.a = a
-		PixelArt.draw_text_centered(self, Vector2(320 + sub_slide, band_y + 31).round(), _announce_sub, sc, true)
+		UiText.outlined_centered(self, Vector2(320 + sub_slide, band_y + 31).round(), _announce_sub, sc)

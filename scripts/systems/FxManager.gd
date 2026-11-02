@@ -12,7 +12,7 @@ extends Node2D
 enum { SQUARE, CROSS, STREAK, PUFF, DEBRIS, CONFETTI, EMBER }
 
 const MAX_PARTICLES := 1800
-const MAX_PUFFS := 140
+const MAX_PUFFS := 96
 
 # particle SoA
 var _px := PackedFloat32Array()
@@ -347,7 +347,7 @@ func _draw_particle(i: int) -> void:
 			var age := 1.0 - t
 			var r := s + _aux[i] * (1.0 - pow(1.0 - age, 2.0))
 			c.a *= clampf(t * 1.6, 0.0, 1.0)
-			PixelArt.draw_disk(self, Vector2(x, y), r, c)
+			_puff_disk(x, y, r, c)
 			if age < 0.4 and r > 2.5:
 				var hl := c.lightened(0.25)
 				hl.a *= 0.6
@@ -384,6 +384,21 @@ func _draw_particle(i: int) -> void:
 				ec.a = t / 0.25
 			var es := s if t > 0.5 else 1.0
 			draw_rect(Rect2(x, y, es, es), ec)
+
+
+## Cheap pixel disk for smoke: small puffs per-row, big ones in 2px rows (half the rects).
+func _puff_disk(cx: float, cy: float, r: float, c: Color) -> void:
+	var ri := int(ceilf(r))
+	var step := 1 if r < 4.0 else 2
+	var dy := -ri
+	while dy <= ri:
+		var fy := dy + step * 0.5
+		var span := r * r - fy * fy
+		if span > 0.0:
+			var hw := floorf(sqrt(span) + 0.5)
+			if hw > 0.0:
+				draw_rect(Rect2(cx - hw, cy + dy, hw * 2.0, step), c)
+		dy += step
 
 
 ## Dithered shockwave: thick and solid at first, thinning into a broken pixel ring.
@@ -494,4 +509,4 @@ func _draw_text(tx: Dictionary) -> void:
 	if tx["big"] and t < 0.12:
 		size = 12
 		p.y -= 3.0
-	PixelArt.draw_text_centered(self, p.round(), tx["text"], c, true, size)
+	UiText.outlined_centered(self, p.round(), tx["text"], c, size)

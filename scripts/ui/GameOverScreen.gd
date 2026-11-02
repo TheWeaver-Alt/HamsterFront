@@ -154,8 +154,8 @@ func _draw() -> void:
 	# titles
 	var ta := clampf((_t - 0.2) / 0.5, 0.0, 1.0)
 	var shake := Vector2(randi_range(-1, 1), randi_range(-1, 1)) if _t < 0.8 else Vector2.ZERO
-	PixelArt.draw_text_centered(self, Vector2(320, 14) + shake, "THE SILO HAS FALLEN", Color(PixelArt.C["r"], ta), true, 18)
-	PixelArt.draw_text_centered(self, Vector2(320, 180), "THE GREAT HORNED GOUDA FEASTS TONIGHT", Color(PixelArt.C["z"], ta), true, 12)
+	UiText.outlined_centered(self, Vector2(320, 14) + shake, "THE SILO HAS FALLEN", Color(PixelArt.C["r"], ta), 18)
+	UiText.outlined_centered(self, Vector2(320, 180), "THE GREAT HORNED GOUDA FEASTS TONIGHT", Color(PixelArt.C["z"], ta), 12)
 	# stats tally
 	var panel := Rect2(190, 196, 260, 114)
 	if _t > 1.0:

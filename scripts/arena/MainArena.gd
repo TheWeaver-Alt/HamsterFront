@@ -403,7 +403,10 @@ func try_upgrade(player, t) -> bool:
 		get_tree().paused = true
 		var info: Dictionary = GameManager.TOWER_INFO[t.kind]
 		math_quiz.ask(player, lvl, "UPGRADE %s TO LV%d" % [info["short"], t.level + 1])
-		await math_quiz.solved
+		while true:
+			var res: Array = await math_quiz.solved
+			if res.size() > 0 and res[0] == player:
+				break
 		if GameManager.phase != "gameover" and not pause_menu.visible:
 			get_tree().paused = false
 		if is_instance_valid(player):

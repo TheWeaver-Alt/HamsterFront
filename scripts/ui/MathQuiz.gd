@@ -438,6 +438,17 @@ func _draw_shape(code: int, c: Vector2, r: float, col: Color) -> void:
 			PixelArt.draw_text_centered(self, c - Vector2(0, 8), "?", k, false, 18)
 
 
+## Big text with a crisp 1px outline (the shared helper scales its outline with the font).
+func _text_o1(pos: Vector2, text: String, col: Color, size: int, centered: bool = false,
+		outline: Color = Color8(26, 16, 32)) -> void:
+	if centered:
+		pos.x -= roundf(PixelArt.text_width(text, size) / 2.0)
+	pos = pos.round()
+	for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
+		PixelArt.draw_text(self, pos + o, text, outline, size)
+	PixelArt.draw_text(self, pos, text, col, size)
+
+
 ## Opaque light tint of a colour over the cream panel (so text in that colour stays readable).
 func _tint(c: Color) -> Color:
 	return PixelArt.C["w"].lerp(c, 0.22)
@@ -658,7 +669,7 @@ func _draw_equation(tokens: Array, y: float, qcol: Color, q_index: int = -1) -> 
 		elif String(tokens[i]) == "+" or String(tokens[i]) == "-" or String(tokens[i]) == "=":
 			col = PixelArt.C["n"]
 		if i == q_index:
-			PixelArt.draw_text_outlined(self, Vector2(roundf(x), y), String(tokens[i]), col, PixelArt.C["k"], size)
+			_text_o1(Vector2(roundf(x), y), String(tokens[i]), col, size)
 		else:
 			PixelArt.draw_text(self, Vector2(roundf(x), y), String(tokens[i]), col, size)
 		x += float(widths[i]) + gap
@@ -681,7 +692,10 @@ func _draw_sequence(v: Dictionary, area: Rect2, qmark: String, qcol: Color) -> v
 		PixelArt.draw_box(self, r, fill, bcol)
 		var txt: String = qmark if is_q else str(items[i])
 		var col: Color = qcol if is_q else PixelArt.C["k"]
-		PixelArt.draw_text_centered(self, Vector2(r.get_center().x, r.position.y + 13), txt, col, is_q, 30)
+		if is_q:
+			_text_o1(Vector2(r.get_center().x, r.position.y + 13), txt, col, 30, true)
+		else:
+			PixelArt.draw_text_centered(self, Vector2(r.get_center().x, r.position.y + 13), txt, col, false, 30)
 		# hint: hop arrows "+1" between boxes
 		if i < n - 1 and _hint_t >= 0.0 and _hint_shown > i:
 			var ax := r.end.x + gap / 2.0
@@ -709,7 +723,7 @@ func _draw_pattern(v: Dictionary, area: Rect2, qcol: Color) -> void:
 				_draw_code(style, int(q["answer"]), r.get_center(), 13.0)
 			else:
 				PixelArt.draw_box(self, r, _tint(qcol), qcol)
-				PixelArt.draw_text_centered(self, Vector2(r.get_center().x, r.position.y + 8), "?", qcol, true, 30)
+				_text_o1(Vector2(r.get_center().x, r.position.y + 8), "?", qcol, 30, true)
 		else:
 			_draw_code(style, int(items[i]), r.get_center(), 13.0)
 	# hint: brackets under each repeat of the unit
@@ -771,7 +785,7 @@ func _draw_button(i: int, dy: float) -> void:
 				slots.append({"t": "item", "label": 0})
 			_draw_slots(Rect2(r.position + Vector2(6, 6), r.size - Vector2(12, 12)), slots, String(v.get("icon", "seed")), 2)
 			if _hint_t >= 0.0 and _hint_shown > i:
-				PixelArt.draw_text_outlined(self, Vector2(r.end.x - 12, r.end.y - 14), str(choice), PixelArt.C["w"], PixelArt.C["n"], 12)
+				_text_o1(Vector2(r.end.x - 12, r.end.y - 14), str(choice), PixelArt.C["n"], 12, false, PixelArt.C["w"])
 		"shape":
 			_draw_shape(choice, c, 22.0, PixelArt.C["o"])
 		"color":

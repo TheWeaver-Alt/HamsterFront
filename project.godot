@@ -17,6 +17,7 @@ boot_splash/show_image=false
 
 PixelArt="*res://autoloads/PixelArt.gd"
 Sfx="*res://autoloads/Sfx.gd"
+Music="*res://autoloads/Music.gd"
 GameManager="*res://autoloads/GameManager.gd"
 CardDB="*res://autoloads/CardDB.gd"
 JuiceManager="*res://autoloads/JuiceManager.gd"

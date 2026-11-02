@@ -79,6 +79,8 @@ func _input(event: InputEvent) -> void:
 	if k.physical_keycode == KEY_F11 or (k.physical_keycode == KEY_ENTER and k.alt_pressed):
 		toggle_fullscreen()
 		get_viewport().set_input_as_handled()
+	elif k.physical_keycode == KEY_M:
+		Music.toggle()
 
 
 func is_fullscreen() -> bool:

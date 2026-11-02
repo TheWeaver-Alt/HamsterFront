@@ -181,7 +181,7 @@ func _start() -> void:
 	if slots.size() == 1:
 		GameManager.player_devices.append("pad0")
 	Sfx.play("wave_start")
-	get_tree().change_scene_to_file(ARENA)
+	Transition.change_scene(ARENA)
 
 
 func _update_seeds(delta: float) -> void:

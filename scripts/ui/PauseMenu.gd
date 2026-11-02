@@ -84,13 +84,9 @@ func _choose() -> void:
 		0:
 			GameManager.arena.toggle_pause()
 		1:
-			get_tree().paused = false
-			Engine.time_scale = 1.0
-			get_tree().reload_current_scene()
+			Transition.reload_scene()
 		2:
-			get_tree().paused = false
-			Engine.time_scale = 1.0
-			get_tree().change_scene_to_file("res://scenes/TitleScreen.tscn")
+			Transition.change_scene("res://scenes/TitleScreen.tscn")
 
 
 func _draw() -> void:

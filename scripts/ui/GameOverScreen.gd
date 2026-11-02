@@ -107,12 +107,11 @@ func _process(delta: float) -> void:
 
 func _choose() -> void:
 	Sfx.play("card")
-	get_tree().paused = false
 	Engine.time_scale = 1.0
 	if sel == 0:
-		get_tree().reload_current_scene()
+		Transition.reload_scene()
 	else:
-		get_tree().change_scene_to_file("res://scenes/TitleScreen.tscn")
+		Transition.change_scene("res://scenes/TitleScreen.tscn")
 
 
 func _draw() -> void:

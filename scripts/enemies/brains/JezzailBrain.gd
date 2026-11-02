@@ -180,14 +180,35 @@ func _fire() -> void:
 
 
 func draw(ci: RatEnemy) -> void:
-	var frame := ci.anim_frame()
-	var bob := Vector2.ZERO
-	if state == "fumble" and int(fumble_t * 10.0) % 2 == 0:
-		bob = Vector2(0, -1)    # frantic reload jiggle
-	ci.draw_sprite("rat_jezzail_%d" % frame, bob)
+	var sprite := "rat_jez_walk_%d" % ci.walk_frame() if ci.moving() else "rat_jez_walk_0"
+	var cell := Vector2(16, 4)
+	match state:
+		"aim":
+			sprite = "rat_jez_aim_0"
+		"fumble":
+			if fumble_t > FUMBLE_TIME - 0.22:
+				sprite = "rat_jez_recoil_0"
+				cell = Vector2(14, 3)
+			else:
+				sprite = "rat_jez_fumble_%d" % (int(fumble_t * 8.0) % 2)
+	if ci.hit_anim > 0.0 and state != "aim":
+		sprite = "rat_jez_recoil_0"
+		cell = Vector2(14, 3)
+	ci.draw_sprite(sprite)
+	# the warp-cheese cell pulses, brighter while charging a shot
+	var sz := Vector2(34, 18)
+	var charge := 0.0
+	if state == "aim":
+		charge = clampf(1.0 - aim_t / AIM_TIME, 0.0, 1.0)
+	var pulse := 0.35 + 0.3 * sin(ci.anim_t * (6.0 + charge * 20.0)) + charge * 0.35
+	ci.draw_sprite_px(sz, cell, Color(0.8, 1.0, 0.55, clampf(pulse, 0.0, 1.0)), Vector2(2, 1))
 	if state == "fumble" and randf() < 0.2:
 		var m := _muzzle_off()
 		ci.draw_rect(Rect2(m.round() + Vector2(randi_range(-1, 1), -2), Vector2(1, 1)), PixelArt.C["g"])
+
+
+func spawn_sprite(_ci: RatEnemy) -> String:
+	return "rat_jez_walk_0"
 
 
 ## Laser sight drawn on a child canvas item above everything so it is always readable.

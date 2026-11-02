@@ -20,6 +20,11 @@ var _segments: Array = []     # [Vector2 a, Vector2 b] in world space
 var _impacts: Array = []      # Vector2 world points
 var _layer: Node2D
 var _t := 0.0
+var _bubbles: Array = []      # [x, y] in bottle-image pixels, rising
+var _bubble_cd := 0.0
+var _glint_t := 3.0           # idle sun glint sweeping across the bottle
+var _had_beam := false
+const WARMUP := 0.35
 
 
 func setup(t: TowerBase) -> void:
@@ -27,8 +32,12 @@ func setup(t: TowerBase) -> void:
 	_layer = tower.add_fx_layer(_draw_beams)
 
 
+func debris_texture() -> Texture2D:
+	return PixelArt.tex("tower_laser_%d_0" % tower.level)
+
+
 func _emitter_cap() -> Vector2:
-	return tower.global_position + Vector2(-0.5, -6.0)
+	return tower.global_position + Vector2(0.0, -6.0)
 
 
 func _emitter() -> Vector2:
@@ -42,6 +51,7 @@ func _valid(e) -> bool:
 
 func physics(delta: float) -> void:
 	_t += delta
+	_tick_bubbles(delta)
 	_segments.clear()
 	_impacts.clear()
 	if not _valid(_target):
@@ -49,8 +59,11 @@ func physics(delta: float) -> void:
 		_on_t = 0.0
 	if _target == null:
 		_aim = _aim.lerp(Vector2(0.6 + sin(_t) * 0.3, 0.8).normalized(), minf(1.0, delta * 3.0))
-		_layer.queue_redraw()
+		if _had_beam:
+			_had_beam = false
+			_layer.queue_redraw()
 		return
+	_had_beam = true
 	_on_t += delta
 	var end: Vector2 = _target.global_position + Vector2(0, -4)
 	_aim = _aim.lerp((end - _emitter_cap()).normalized(), minf(1.0, delta * 18.0)).normalized()
@@ -124,6 +137,26 @@ func _trace(from: Vector2, e, victims: Array) -> void:
 		victims.append(e)
 
 
+## Bubbles rise through the water; faster and more of them while the beam is on.
+func _tick_bubbles(delta: float) -> void:
+	var beaming := _target != null
+	_bubble_cd -= delta * (3.0 if beaming else 1.0)
+	if _bubble_cd <= 0.0 and _bubbles.size() < 6:
+		_bubble_cd = randf_range(0.35, 0.9)
+		_bubbles.append([float(randi_range(6, 11)), 19.0])
+	var k := _bubbles.size() - 1
+	while k >= 0:
+		var b: Array = _bubbles[k]
+		b[1] = float(b[1]) - delta * (14.0 if beaming else 7.0)
+		b[0] = float(b[0]) + sin(_t * 9.0 + k) * delta * 3.0
+		if float(b[1]) < 10.0:
+			_bubbles.remove_at(k)
+		k -= 1
+	_glint_t -= delta
+	if _glint_t < -0.5:
+		_glint_t = randf_range(2.5, 5.0)
+
+
 static func _seg_dist(p: Vector2, a: Vector2, b: Vector2) -> float:
 	var ab := b - a
 	var t := clampf((p - a).dot(ab) / maxf(ab.length_squared(), 0.001), 0.0, 1.0)
@@ -141,53 +174,92 @@ func _draw_beams() -> void:
 	var od := tower.is_overdrive()
 	var pulse := 0.5 + 0.5 * sin(_t * 30.0)
 	var ramp := clampf(_on_t / RAMP_TIME, 0.0, 1.0)
+	var warm := clampf(_on_t / WARMUP, 0.0, 1.0)
+	# during warm-up the beam flickers in thin before it locks to full strength
+	if warm < 1.0 and int(_t * 40.0) % 3 == 0:
+		return
 	var i := 0
 	for seg in _segments:
 		var a: Vector2 = seg[0] - origin
 		var b: Vector2 = seg[1] - origin
-		var glow := Color(0.59, 0.86, 1.0, 0.38 + 0.15 * pulse)
+		var glow := Color(0.59, 0.86, 1.0, (0.38 + 0.15 * pulse) * warm)
 		if od:
 			glow = _rainbow(i * 0.2)
 			glow.a = 0.5
-		var w := 3.0 + ramp * 2.0 + (1.0 if od else 0.0)
+		var w := (3.0 + ramp * 2.0 + (1.0 if od else 0.0)) * lerpf(0.4, 1.0, warm)
 		_layer.draw_line(a, b, glow, w)
-		_layer.draw_line(a, b, Color(0.8, 0.96, 1.0, 0.75), 2.0)
-		# wobbling core
+		_layer.draw_line(a, b, Color(0.8, 0.96, 1.0, 0.75 * warm), maxf(1.0, 2.0 * warm))
+		# wobbling white-hot core
 		var core := Color8(255, 255, 230)
 		var n := (b - a).orthogonal().normalized()
 		var steps := maxi(2, int(a.distance_to(b) / 6.0))
 		var pts := PackedVector2Array()
-		for s in steps + 1:
-			var t := float(s) / steps
-			var wob := sin(_t * 40.0 + s * 1.7 + i) * 0.6 if s > 0 and s < steps else 0.0
+		for s2 in steps + 1:
+			var t := float(s2) / steps
+			var wob := sin(_t * 40.0 + s2 * 1.7 + i) * 0.6 if s2 > 0 and s2 < steps else 0.0
 			pts.append((a.lerp(b, t) + n * wob).round())
 		_layer.draw_polyline(pts, core, 1.0 if not od else 2.0)
+		# heat shimmer: faint pixels wavering either side of the beam
+		if warm >= 1.0:
+			var len_px := a.distance_to(b)
+			for h in int(len_px / 9.0):
+				var t2 := fmod(h * 0.137 + _t * 0.6, 1.0)
+				var side := 1.0 if h % 2 == 0 else -1.0
+				var off := side * (2.5 + ramp * 1.5 + sin(_t * 17.0 + h * 2.3) * 1.2)
+				var hp := (a.lerp(b, t2) + n * off).round()
+				_layer.draw_rect(Rect2(hp, Vector2(1, 1)), Color(1, 1, 0.9, 0.22 + 0.18 * ramp))
 		i += 1
 	for ip in _impacts:
 		var p: Vector2 = (ip - origin).round()
-		var s := 2.0 + pulse * 2.0
+		var s := (2.0 + pulse * 2.0) * warm
 		var c := Color8(255, 255, 230) if not od else _rainbow(0.5)
 		_layer.draw_rect(Rect2(p - Vector2(s, 0), Vector2(s * 2 + 1, 1)), Color(c, 0.85))
 		_layer.draw_rect(Rect2(p - Vector2(0, s), Vector2(1, s * 2 + 1)), Color(c, 0.85))
 		PixelArt.draw_disk(_layer, p, 1.5 + pulse, Color(1, 1, 1, 0.9))
+		# scorch dot on the target
+		_layer.draw_rect(Rect2(p + Vector2(-1, 2), Vector2(3, 1)), Color(1.0, 0.5, 0.2, 0.5 * ramp))
 
 
 func draw(ci: Node2D) -> void:
-	ci.draw_texture(PixelArt.tex("tower_laser_%d" % tower.level), Vector2(-8, -26))
-	# swivelling dripper tube + ball bearing
-	var cap := Vector2(-0.5, -6.0)
-	var tip := cap + _aim * 5.0
-	ci.draw_line(cap.round(), tip.round(), PixelArt.C["g"], 2.0)
+	var beaming := not _segments.is_empty()
+	# water sloshes: lazily when idle, eagerly while beaming
+	var slosh: int = [0, 1, 0, 2][int(_t * (7.0 if beaming else 2.0)) % 4]
+	var bx := -9.0
+	var by := -30.0
+	ci.draw_texture(PixelArt.tex("tower_laser_%d_%d" % [tower.level, slosh]), Vector2(bx, by))
+	# rising bubbles inside the bottle
+	for b in _bubbles:
+		ci.draw_rect(Rect2(Vector2(bx + roundf(float(b[0])), by + roundf(float(b[1]))), Vector2(1, 1)), Color(1, 1, 1, 0.8))
+	# idle sun glint sweeping down the plastic
+	if _glint_t < 0.0:
+		var gy := by + 4.0 + (-_glint_t / 0.5) * 14.0
+		ci.draw_rect(Rect2(bx + 5, roundf(gy), 1, 2), Color(1, 1, 1, 0.9))
+		ci.draw_rect(Rect2(bx + 6, roundf(gy) + 1, 1, 1), Color(1, 1, 1, 0.5))
+	# swivelling metal dripper tube + ball bearing catching the sun
+	var cap := Vector2(0.0, -6.0)
+	var tip := cap + _aim * 6.0
+	ci.draw_line(cap.round(), tip.round(), PixelArt.C["G"], 2.0)
 	ci.draw_line(cap.round(), tip.round(), PixelArt.C["W"], 1.0)
-	ci.draw_rect(Rect2(tip.round() - Vector2(1, 1), Vector2(2, 2)), PixelArt.C["W"])
-	ci.draw_rect(Rect2(tip.round() - Vector2(1, 1), Vector2(1, 1)), Color.WHITE)
-	# sun glint on the bottle while beaming
-	if not _segments.is_empty() and int(_t * 8.0) % 2 == 0:
-		ci.draw_rect(Rect2(-3, -24, 1, 1), Color.WHITE)
-		ci.draw_rect(Rect2(-4, -23, 3, 1), Color(1, 1, 0.8, 0.8))
-	# ramp gauge: water glows brighter the longer the beam holds
-	if _on_t > 0.0 and not _segments.is_empty():
+	var tp := tip.round()
+	ci.draw_rect(Rect2(tp - Vector2(1, 1), Vector2(3, 3)), PixelArt.C["g"])
+	ci.draw_rect(Rect2(tp - Vector2(1, 1), Vector2(2, 2)), PixelArt.C["W"])
+	ci.draw_rect(Rect2(tp - Vector2(1, 1), Vector2(1, 1)), Color.WHITE)
+	if beaming:
+		var warm := clampf(_on_t / WARMUP, 0.0, 1.0)
+		if warm < 1.0:
+			# sunlight motes converge into the bearing
+			for k in 4:
+				var a := _t * 9.0 + k * TAU / 4.0
+				var mp := tip + Vector2.from_angle(a) * (10.0 * (1.0 - warm) + 1.0)
+				ci.draw_rect(Rect2(mp.round(), Vector2(1, 1)), Color(1, 1, 0.75, 0.9))
+		else:
+			# 4-point star glint on the bearing
+			var arm := 2.0 + roundf(sin(_t * 18.0) * 1.0)
+			var gc := Color(1, 1, 0.85, 0.85)
+			ci.draw_rect(Rect2(tp.x - arm, tp.y, arm * 2.0 + 1.0, 1), gc)
+			ci.draw_rect(Rect2(tp.x, tp.y - arm, 1, arm * 2.0 + 1.0), gc)
+		# ramp gauge: the label glows brighter the longer the beam holds
 		var r := clampf(_on_t / RAMP_TIME, 0.0, 1.0)
-		ci.draw_rect(Rect2(-3, -16, 6, 1), Color(1, 1, 0.7, 0.25 + 0.5 * r))
+		ci.draw_rect(Rect2(bx + 5, by + 12, 8, 1), Color(1, 1, 0.7, 0.2 + 0.6 * r))
 	if tower.is_overdrive():
-		ci.draw_rect(Rect2(-3, -20 + roundf(sin(_t * 9.0) * 2.0), 6, 1), _rainbow(0.0))
+		ci.draw_rect(Rect2(bx + 5, by + 8 + roundf(sin(_t * 9.0) * 2.0), 8, 1), _rainbow(0.0))

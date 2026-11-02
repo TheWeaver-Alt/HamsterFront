@@ -61,6 +61,11 @@ func physics(delta: float) -> void:
 	if _snd_t <= 0.0:
 		_snd_t = 1.1
 		Sfx.play("roomba", randf_range(0.9, 1.1), -14.0)
+	# battered: smoking and sparking
+	if rat.hp < rat.max_hp * 0.4 and randf() < 0.06:
+		GameManager.arena.fx.smoke(rat.global_position + Vector2(randf_range(-6, 6), -12), 1)
+		if randf() < 0.4:
+			GameManager.arena.fx.sparks(rat.global_position + Vector2(randf_range(-8, 8), -8), Color8(170, 255, 100), 2)
 	# unstick
 	_stuck_t += delta
 	if _stuck_t >= 0.6:
@@ -157,25 +162,28 @@ func _zap() -> void:
 
 
 func draw(ci: RatEnemy) -> void:
-	ci.draw_sprite("rat_roomba")
+	ci.draw_sprite("rat_roomba_%d" % (int(_brush / 5.0) % 4))
+	var o := ci.vis_off
 	# spinning side brush at the front corner
-	var bp := Vector2(9.0 * ci.facing, -3.0)
+	var bp := Vector2(9.0 * ci.facing, -3.0) + o
 	for i in 3:
 		var a := _brush + i * TAU / 3.0
 		ci.draw_line(bp, (bp + Vector2(cos(a) * 3.0, sin(a) * 1.5)).round(), PixelArt.C["y"], 1.0)
 	# crackling warp arc between the coils
 	if randf() < 0.6:
-		var a0 := Vector2(-7, -15)
-		var a1 := Vector2(7, -15)
+		var a0 := Vector2(-7, -15) + o
+		var a1 := Vector2(7, -15) + o
 		var prev := a0
-		for s in range(1, 5):
-			var p := a0.lerp(a1, s / 4.0) + Vector2(0, randi_range(-2, 1))
+		for s2 in range(1, 5):
+			var p := a0.lerp(a1, s2 / 4.0) + Vector2(0, randi_range(-2, 1))
 			ci.draw_line(prev.round(), p.round(), PixelArt.C["z"] if randf() < 0.7 else Color.WHITE, 1.0)
 			prev = p
+	# cracked shell when badly hurt
+	if ci.hp < ci.max_hp * 0.4:
+		ci.draw_sprite_px(Vector2(26, 20), Vector2(9, 11), PixelArt.C["k"])
+		ci.draw_sprite_px(Vector2(26, 20), Vector2(10, 12), PixelArt.C["k"])
+		ci.draw_sprite_px(Vector2(26, 20), Vector2(16, 10), PixelArt.C["k"])
 
 
-func draw_spawning(ci: RatEnemy) -> void:
-	# the vacuum's dome lid and evil light poke out of the hole
-	ci.draw_rect(Rect2(-7, -3, 14, 3), PixelArt.C["G"])
-	ci.draw_rect(Rect2(-5, -4, 10, 1), PixelArt.C["g"])
-	ci.draw_rect(Rect2(0, -3, 1, 1), PixelArt.C["z"])
+func spawn_sprite(_ci: RatEnemy) -> String:
+	return "rat_roomba_0"

@@ -227,45 +227,166 @@ func _draw() -> void:
 	_draw_footer()
 
 
+## Parallax backyard: slow-scrolling lawn, drifting cloud shadows, a hedge row (with rats
+## peeking out of it) and fast foreground grass blades.
 func _draw_backdrop() -> void:
+	var scroll := fmod(_t * 6.0, 16.0)
 	for y in 23:
-		for x in 40:
-			var n := (x * 7 + y * 13) % 4
+		for x in 41:
+			var wx := x + int(_t * 6.0 / 16.0)
+			var n := (wx * 7 + y * 13) % 4
 			var tile := "tile_grass_%d" % n
-			if (x * 3 + y * 5) % 17 == 0:
-				tile = "tile_flowers_%d" % ((x + y) % 3)
-			draw_texture(PixelArt.tex(tile), Vector2(x * 16, y * 16), Color(0.5, 0.5, 0.62))
+			if (wx * 3 + y * 5) % 17 == 0:
+				tile = "tile_flowers_%d" % ((wx + y) % 3)
+			draw_texture(PixelArt.tex(tile), Vector2(x * 16 - scroll, y * 16), Color(0.5, 0.5, 0.62))
+	# drifting cloud shadows
+	for i in 3:
+		var cx := fmod(_t * (5.0 + i * 2.0) + i * 260.0, 900.0) - 130.0
+		var cy := 60.0 + i * 110.0 + sin(_t * 0.3 + i) * 10.0
+		_cloud_shadow(Vector2(cx, cy), 46.0 + i * 12.0)
 	# fence top and bottom
-	for x in 40:
-		draw_texture(PixelArt.tex("tile_fence"), Vector2(x * 16, -6), Color(0.6, 0.6, 0.7))
-		draw_texture(PixelArt.tex("tile_fence"), Vector2(x * 16, 350), Color(0.6, 0.6, 0.7))
+	var fscroll := fmod(_t * 10.0, 16.0)
+	for x in 41:
+		draw_texture(PixelArt.tex("tile_fence"), Vector2(x * 16 - fscroll, -6), Color(0.6, 0.6, 0.7))
+		draw_texture(PixelArt.tex("tile_fence"), Vector2(x * 16 - fscroll, 350), Color(0.6, 0.6, 0.7))
 	# vignette
 	for i in 8:
 		var a := 0.06 * (8 - i)
 		draw_rect(Rect2(0, i * 4, 640, 4), Color(0.1, 0.06, 0.12, a))
 		draw_rect(Rect2(0, 356 - i * 4, 640, 4), Color(0.1, 0.06, 0.12, a))
 	draw_rect(Rect2(0, 0, 640, 360), Color(0.1, 0.06, 0.12, 0.3))
+	_draw_hedge()
+	# foreground blades rushing past along the bottom edge
+	for i in 40:
+		var bx := 660.0 - fmod(_t * 34.0 + i * 37.0, 700.0)
+		var h := 3.0 + float((i * 5) % 4)
+		var c := PixelArt.C["f"] if i % 3 else PixelArt.C["E"]
+		draw_rect(Rect2(roundf(bx), 350 - h, 1, h), c)
+		draw_rect(Rect2(roundf(bx) + 1, 351 - h, 1, 1), c.lightened(0.2))
+
+
+func _cloud_shadow(c: Vector2, r: float) -> void:
+	var col := Color(0.05, 0.03, 0.12, 0.13)
+	for dy in range(-int(r * 0.45), int(r * 0.45) + 1, 2):
+		var f := float(dy) / (r * 0.45)
+		var hw := roundf(r * sqrt(maxf(0.0, 1.0 - f * f)))
+		var wob := roundf(sin(dy * 0.4 + c.x * 0.02) * 3.0)
+		draw_rect(Rect2(roundf(c.x - hw + wob), roundf(c.y + dy), hw * 2.0, 2), col)
+
+
+## A hedge band between the logo and the stage, scrolling a little faster than the lawn.
+## Now and then a rat pokes its head out, glowing eyes first.
+func _draw_hedge() -> void:
+	var y0 := 100.0
+	var hs := fmod(_t * 12.0, 24.0)
+	var dark := PixelArt.C["f"].darkened(0.5)
+	var mid := PixelArt.C["f"].darkened(0.22)
+	var lite := PixelArt.C["E"].darkened(0.28)
+	var speck := PixelArt.C["e"].darkened(0.3)
+	# soft shadow the hedge casts on the lawn
+	draw_rect(Rect2(0, y0 + 17, 640, 2), Color(0.05, 0.03, 0.08, 0.35))
+	draw_rect(Rect2(0, y0 + 19, 640, 1), Color(0.05, 0.03, 0.08, 0.18))
+	for i in 30:
+		var x := i * 24.0 - hs
+		var wx := i + int(_t * 12.0 / 24.0)
+		var cy := y0 + 10.0
+		# three overlapping leafy clumps per bush, lit from the top-left
+		for b in 3:
+			var h := (wx * 7 + b * 13) % 5
+			var c := Vector2(x + 4.0 + b * 8.0 + float(h % 3) - 1.0, cy + float((h + b) % 3) - 1.0 - (2.0 if b == 1 else 0.0))
+			var r := 6.0 + float(h % 3)
+			PixelArt.draw_disk(self, c + Vector2(1, 2), r, dark)
+			PixelArt.draw_disk(self, c, r - 1.0, mid)
+			PixelArt.draw_disk(self, c - Vector2(1, 2), r - 3.5, lite)
+			draw_rect(Rect2((c + Vector2(-2, -3)).round(), Vector2(1, 1)), speck)
+			draw_rect(Rect2((c + Vector2(2, -1)).round(), Vector2(1, 1)), speck)
+		if (wx * 5) % 7 == 0:
+			draw_rect(Rect2(x + 12, cy - 6, 1, 1), PixelArt.C["p"].darkened(0.2))
+			draw_rect(Rect2(x + 18, cy - 2, 1, 1), PixelArt.C["w"].darkened(0.3))
+		# a sneaky rat in this bush?
+		var cycle := fmod(_t + wx * 1.7, 9.0)
+		if wx % 5 == 2 and cycle < 2.2:
+			var up := clampf(cycle / 0.3, 0.0, 1.0) * clampf((2.2 - cycle) / 0.3, 0.0, 1.0)
+			var hx := x + 12.0
+			var hy := cy - 4.0 - roundf(up * 6.0)
+			draw_rect(Rect2(hx - 3, hy, 6, 4), PixelArt.C["m"])
+			draw_rect(Rect2(hx - 2, hy - 1, 4, 1), PixelArt.C["m"])
+			draw_rect(Rect2(hx - 4, hy - 2, 2, 2), PixelArt.C["q"])
+			draw_rect(Rect2(hx + 2, hy - 2, 2, 2), PixelArt.C["q"])
+			var blink := fmod(_t * 3.0 + wx, 4.0) < 0.15
+			if not blink:
+				draw_rect(Rect2(hx - 2, hy + 1, 1, 1), PixelArt.C["z"])
+				draw_rect(Rect2(hx + 1, hy + 1, 1, 1), PixelArt.C["z"])
+			draw_rect(Rect2(hx - 1, hy + 3, 2, 1), PixelArt.C["p"])
+			# whiskers twitch
+			if int(_t * 6.0) % 2 == 0:
+				draw_rect(Rect2(hx - 5, hy + 2, 2, 1), PixelArt.C["W"])
+				draw_rect(Rect2(hx + 3, hy + 2, 2, 1), PixelArt.C["W"])
+			# foliage in front of the rat
+			PixelArt.draw_disk(self, Vector2(hx, cy + 2), 5.5, mid)
+			PixelArt.draw_disk(self, Vector2(hx - 1, cy + 1), 3.0, lite)
+		elif wx % 5 == 2 and cycle < 3.0:
+			# eyes glinting in the dark before it pops up
+			draw_rect(Rect2(x + 10, cy, 1, 1), PixelArt.C["z"])
+			draw_rect(Rect2(x + 13, cy, 1, 1), PixelArt.C["z"])
 
 
 func _draw_logo() -> void:
-	PixelArt.draw_text_centered(self, Vector2(320, 14 + roundf(sin(_t * 2.0))), "DEFENCE OF", PixelArt.C["y"], true, 12)
-	# wavy, per-letter HAMSTERLAND
+	var top_drop := 1.0 - _ease_back(clampf(_t / 0.45, 0.0, 1.0))
+	PixelArt.draw_text_centered(self, Vector2(320, 14 + roundf(sin(_t * 2.0)) - top_drop * 40.0), "DEFENCE OF", PixelArt.C["y"], true, 12)
+	# per-letter HAMSTERLAND: letters drop in one by one, then bob; a shine sweeps across
 	var word := "HAMSTERLAND"
 	var size := 30
 	var total := PixelArt.text_width(word, size)
 	var x := 320.0 - total / 2.0
+	var shine_x := fmod(_t * 220.0, 1400.0) - 300.0
 	for i in word.length():
 		var ch := word[i]
 		var w := PixelArt.text_width(ch, size)
-		var y := 32.0 + roundf(sin(_t * 3.0 + i * 0.55) * 3.0)
-		# chunky drop shadow then outlined letter
+		var d := clampf((_t - 0.25 - i * 0.07) / 0.4, 0.0, 1.0)
+		if d <= 0.0:
+			x += w
+			continue
+		var fall := (1.0 - _bounce(d)) * -70.0
+		var hop := 0.0
+		# a ripple hop runs along the word every few seconds
+		var rp := fmod(_t, 5.0) - 2.0 - i * 0.06
+		if rp > 0.0 and rp < 0.3:
+			hop = -sin(rp / 0.3 * PI) * 4.0
+		var y := 32.0 + roundf(sin(_t * 3.0 + i * 0.55) * 2.0 + fall + hop)
 		PixelArt.draw_text(self, Vector2(x + 2, y + 4), ch, PixelArt.C["K"], size)
 		var col := PixelArt.C["o"].lerp(PixelArt.C["y"], 0.5 + 0.5 * sin(_t * 2.0 + i * 0.4))
+		var sd := absf((x + w * 0.5) - shine_x)
+		if sd < 18.0:
+			col = col.lerp(Color.WHITE, 1.0 - sd / 18.0)
 		PixelArt.draw_text_outlined(self, Vector2(x, y), ch, col, K, size)
 		x += w
-	var sub_col := PixelArt.C["Z"] if int(_t * 5.0) % 23 != 0 else PixelArt.C["z"]
-	PixelArt.draw_text_centered(self, Vector2(320, 70), "MECH-POUCH PROTOCOL", sub_col, true, 12)
-	PixelArt.draw_text_centered(self, Vector2(320, 86), "1-2 PLAYER LOCAL CO-OP TOWER DEFENSE", PixelArt.C["W"], true)
+	var sub_a := clampf((_t - 1.1) / 0.35, 0.0, 1.0)
+	if sub_a > 0.0:
+		# subtitle slides up into place (outline only once fully in, so no dark ghosting)
+		var sy := roundf((1.0 - sub_a) * 8.0)
+		var sub_col := PixelArt.C["Z"] if int(_t * 5.0) % 23 != 0 else PixelArt.C["z"]
+		PixelArt.draw_text_centered(self, Vector2(320, 70 + sy), "MECH-POUCH PROTOCOL", Color(sub_col, sub_a), sub_a >= 1.0, 12)
+		PixelArt.draw_text_centered(self, Vector2(320, 86 + sy), "1-2 PLAYER LOCAL CO-OP TOWER DEFENSE", Color(PixelArt.C["W"], sub_a), sub_a >= 1.0)
+
+
+static func _ease_back(x: float) -> float:
+	var u := x - 1.0
+	return 1.0 + 2.7 * u * u * u + 1.7 * u * u
+
+
+static func _bounce(x: float) -> float:
+	if x < 0.55:
+		return (x / 0.55) * (x / 0.55)
+	var u := (x - 0.8) / 0.25
+	return 1.0 - 0.18 * maxf(0.0, 1.0 - u * u)
+
+
+func _title_flash(p: Vector2, s: float) -> void:
+	PixelArt.draw_disk(self, p, s * 0.5, PixelArt.C["y"])
+	draw_rect(Rect2(p.x, p.y - 1, s * 1.6, 2), PixelArt.C["y"])
+	draw_rect(Rect2(p.x - 1, p.y - s * 0.6, 2, s * 1.2), PixelArt.C["y"])
+	PixelArt.draw_disk(self, p, s * 0.3, Color.WHITE)
 
 
 func _draw_scene() -> void:
@@ -296,10 +417,28 @@ func _draw_scene() -> void:
 	draw_texture(PixelArt.tex("brawler_body_%d" % walk), b + Vector2(-13, -22 + bob))
 	draw_texture(PixelArt.tex("ham_head_%d" % lvl), b + Vector2(-13, -30 + bob))
 	draw_texture(PixelArt.tex("brawler_dome"), b + Vector2(-9, -30 + bob))
-	draw_texture(PixelArt.tex("brawler_gun"), b + Vector2(-2, -17 + bob))
-	# WHEELER-X (right), facing left
-	var wpos := Vector2(408, ground_y)
-	draw_rect(Rect2(wpos.x - 11, wpos.y - 2, 22, 3), Color(0, 0, 0, 0.3))
+	# every few seconds the brawler test-fires its sawdust shotgun
+	var shot_t := fmod(_t, 3.4)
+	var recoil := 2.0 if shot_t < 0.08 else 0.0
+	draw_texture(PixelArt.tex("brawler_gun"), b + Vector2(-2 - recoil, -17 + bob))
+	if shot_t < 0.1:
+		var mz := b + Vector2(16 - recoil, -13 + bob)
+		_title_flash(mz, 7.0 if shot_t < 0.05 else 4.0)
+	elif shot_t < 0.45:
+		for k in 5:
+			var pp := b + Vector2(17 + shot_t * (80.0 + k * 25.0), -13 + bob + (k - 2) * shot_t * 18.0)
+			draw_rect(Rect2(pp.round(), Vector2(1, 1)), Color(PixelArt.C["c"], 1.0 - shot_t / 0.45))
+	# WHEELER-X (right), facing left; does a little jetpack hop now and then
+	var hop_t := fmod(_t + 1.3, 4.2)
+	var hop := 0.0
+	if hop_t < 0.5:
+		hop = -sin(hop_t / 0.5 * PI) * 10.0
+	var wpos := Vector2(408, ground_y + roundf(hop))
+	if hop_t < 0.5:
+		for k in 3:
+			var fy := wpos.y + 2.0 + k * 2.0 + randf() * 2.0
+			draw_rect(Rect2(wpos.x - 1 + randi_range(-1, 1), fy, 2, 2), [PixelArt.C["I"], PixelArt.C["y"], PixelArt.C["i"]][k])
+	draw_rect(Rect2(wpos.x - 11 + roundf(-hop * 0.2), ground_y - 2, 22 + roundf(hop * 0.4), 3), Color(0, 0, 0, 0.3))
 	var c := wpos + Vector2(0, -14)
 	for i in 6:
 		var side := -1.0 if i < 3 else 1.0

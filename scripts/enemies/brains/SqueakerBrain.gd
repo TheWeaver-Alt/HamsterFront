@@ -7,7 +7,10 @@ const TRIP_CHANCE := 0.10
 const TRIP_TIME := 0.9
 const TRIP_BARKS := ["Tail-tail! Who step-trip?!", "Clumsy-fool! My tail!", "Squeeek-trip!"]
 
+const RA := preload("res://scripts/art/RatArt.gd")
+
 var _bump_cd := 0.0
+var _choo := false
 
 
 func physics(delta: float) -> void:
@@ -36,7 +39,57 @@ func trip() -> void:
 
 
 func draw(ci: RatEnemy) -> void:
-	if ci.trip_t > 0.0:
-		ci.draw_sprite("rat_squeaker_trip", Vector2(0, 2))
+	var v := ci.variant
+	var pose := "walk"
+	var f := 0
+	var glow := true
+	if ci.zap_anim > 0.0:
+		pose = "zap"
+		f = int(ci.anim_t * 30.0) % 2
+		glow = false
+	elif ci.trip_t > 0.0:
+		pose = "trip"
+		glow = false
+	elif ci.sneeze_t > 0.0:
+		pose = "sneeze"
+		f = 0 if fmod(ci.sneeze_t, 0.55) > 0.2 else 1
+		glow = false
+		if f == 1 and not _choo:
+			_choo = true
+			_sneeze_puff(ci)
+		elif f == 0:
+			_choo = false
+	elif ci.hit_anim > 0.0:
+		pose = "hit"
+		glow = false
+	elif ci.atk_anim > 0.0:
+		pose = "bite"
+		f = 1 if ci.atk_anim > 0.15 else 0
+	elif ci.moving():
+		f = ci.walk_frame()
 	else:
-		ci.draw_sprite("rat_squeaker_%d" % ci.anim_frame())
+		pose = "idle"
+		f = ci.idle_frame()
+	var off := Vector2(0, 2) if pose == "trip" else Vector2.ZERO
+	ci.draw_sprite("rat_sq_%d_%s_%d" % [v, pose, f], off)
+	# glowing warp eye (the eyepatch variant only has the patch)
+	if glow and v != 1:
+		var e := Vector2(RA.sq_eye(pose, f))
+		var sz := Vector2(RA.SQ_W, RA.SQ_H)
+		var halo := Color(0.67, 1.0, 0.4, 0.28)
+		ci.draw_sprite_px(sz, e + Vector2(-1, 0), halo)
+		ci.draw_sprite_px(sz, e + Vector2(1, 0), halo)
+		ci.draw_sprite_px(sz, e + Vector2(0, -1), halo)
+		if int(ci.anim_t * 7.0 + ci.idle_seed * 3.0) % 9 == 0:
+			ci.draw_sprite_px(sz, e, Color.WHITE)
+
+
+func _sneeze_puff(ci: RatEnemy) -> void:
+	var arena = GameManager.arena
+	if arena == null or not is_instance_valid(arena):
+		return
+	var nose := ci.global_position + Vector2(ci.facing * 9.0, -6.0)
+	arena.fx.burst(nose, 6, [PixelArt.C["t"], PixelArt.C["c"], PixelArt.C["w"]], 20, 70, 0.2, 0.45, 1.0, 20.0, 4.0,
+		Vector2(ci.facing, 0), 0.6)
+	if randf() < 0.3:
+		Sfx.play_var("squeak_rat", 1.6, 0.1, -14.0)

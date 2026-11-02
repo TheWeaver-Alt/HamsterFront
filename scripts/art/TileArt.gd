@@ -296,6 +296,33 @@ static func fence() -> Image:
 	return img
 
 
+## Side fence (left/right borders) seen from above: a line of picket tops on two rails,
+## with a soft cast shadow on the grass to the right.
+static func fence_side() -> Image:
+	var img := PA.new_img(S, S)
+	img.fill(PA.col("f").darkened(0.15))
+	for y in S:
+		PA.px(img, 11, y, PA.col("f").darkened(0.35))
+		PA.px(img, 12, y, PA.col("f").darkened(0.28))
+		PA.px(img, 4, y, PA.col("B"))
+		PA.px(img, 10, y, PA.col("B"))
+	for p in 4:
+		var y0 := p * 4
+		for y in range(y0, y0 + 3):
+			PA.px(img, 5, y, PA.col("c").darkened(0.1))
+			PA.px(img, 6, y, PA.col("t"))
+			PA.px(img, 7, y, PA.col("t"))
+			PA.px(img, 8, y, PA.col("T"))
+			PA.px(img, 9, y, PA.col("b"))
+		PA.px(img, 6, y0, PA.col("c"))
+		PA.px(img, 7, y0 + 1, PA.col("g"))
+	for y in S:
+		if (y * 5) % 7 < 2:
+			PA.px(img, 2, y, PA.col("E"))
+			PA.px(img, 13, y, PA.col("E"))
+	return img
+
+
 static func dirt() -> Image:
 	var img := PA.new_img(S, S)
 	img.fill(PA.col("b"))

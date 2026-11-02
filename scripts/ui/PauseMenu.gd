@@ -92,6 +92,11 @@ func _choose() -> void:
 func _draw() -> void:
 	var a := clampf(_t / 0.15, 0.0, 1.0)
 	draw_rect(Rect2(0, 0, 640, 360), Color(0.06, 0.03, 0.08, 0.72 * a))
+	# panels drop in with a springy settle
+	var e := clampf(_t / 0.28, 0.0, 1.0)
+	var u := e - 1.0
+	var settle := 1.0 + 2.6 * u * u * u + 1.6 * u * u
+	draw_set_transform(Vector2(0, roundf((1.0 - settle) * -40.0)), 0.0, Vector2.ONE)
 	# central panel
 	var panel := Rect2(210, 70, 220, 190)
 	PixelArt.draw_box(self, panel, Color(0.1, 0.06, 0.13, 0.96), PixelArt.C["y"])
@@ -124,6 +129,7 @@ func _draw() -> void:
 			_draw_loadout(p, pi)
 		pi += 1
 	_draw_team_cards()
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_loadout(p, idx: int) -> void:

@@ -755,6 +755,9 @@ func _draw_button(i: int, dy: float) -> void:
 		lift = -4.0 + roundf(sin(_t * 6.0))
 	if is_sel and _press_t > 0.0:
 		lift = 2.0
+	if state == "correct" and is_correct:
+		# happy bounce on the right answer
+		lift = -roundf(absf(sin(_state_t * 11.0)) * 6.0 * maxf(0.0, 1.0 - _state_t))
 	var wob := 0.0
 	if i == _wrong_choice and _wobble > 0.0:
 		wob = roundf(sin(_t * 55.0) * 4.0 * _wobble)

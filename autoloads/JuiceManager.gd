@@ -4,8 +4,10 @@ extends Node
 
 const BarkBubbleScript := preload("res://scripts/ui/BarkBubble.gd")
 
-const MAX_SHAKE_PX := 9.0
-const TRAUMA_DECAY := 1.7
+const MAX_SHAKE_PX := 8.0
+const TRAUMA_DECAY := 2.5          # short, punchy shakes
+const HITSTOP_MAX := 0.11          # a chain of hit-stops never freezes longer than this
+const HITSTOP_GRACE_MS := 70       # small hit-stops right after one ends are skipped
 const POOL_SIZE := 14
 const MAX_ACTIVE_RAT_BARKS := 3
 
@@ -28,7 +30,7 @@ var _flash_color: Color = Color.WHITE
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_noise.seed = 1337
-	_noise.frequency = 0.9
+	_noise.frequency = 1.3
 	_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
 
 
@@ -56,6 +58,7 @@ func _process(_delta: float) -> void:
 	# hit-stop restore
 	if _hitstop_until_ms > 0 and Time.get_ticks_msec() >= _hitstop_until_ms:
 		_hitstop_until_ms = 0
+		_hitstop_end_ms = Time.get_ticks_msec()
 		Engine.time_scale = 1.0
 	# camera shake
 	trauma = maxf(0.0, trauma - TRAUMA_DECAY * real_dt)
@@ -82,8 +85,19 @@ func _process(_delta: float) -> void:
 # ------------------------------------------------------------------ hit-stop & shake
 
 ## Freeze-frame: drops Engine.time_scale for `duration` real seconds.
+var _hitstop_start_ms: int = 0
+var _hitstop_end_ms: int = -100000
+
+
 func hit_stop(duration: float = 0.05, scale: float = 0.05) -> void:
-	var until := Time.get_ticks_msec() + int(duration * 1000.0)
+	var now := Time.get_ticks_msec()
+	duration = minf(duration, HITSTOP_MAX)
+	if _hitstop_until_ms == 0:
+		# not frozen: skip tiny freezes that would land right after the last one (feels laggy)
+		if now - _hitstop_end_ms < HITSTOP_GRACE_MS and duration < 0.08:
+			return
+		_hitstop_start_ms = now
+	var until := mini(now + int(duration * 1000.0), _hitstop_start_ms + int(HITSTOP_MAX * 1000.0))
 	if until > _hitstop_until_ms:
 		_hitstop_until_ms = until
 	Engine.time_scale = minf(Engine.time_scale, scale)

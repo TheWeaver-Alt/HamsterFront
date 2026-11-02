@@ -7,6 +7,18 @@ extends RefCounted
 const PA := preload("res://autoloads/PixelArt.gd")
 const TA := preload("res://scripts/art/TileArt.gd")
 
+# Organic colour patches (warm/cool on grass, dusty/damp on lane dirt) baked into the tiles so
+# the repeating tile variants don't read as a grid. Half-resolution field, 2px granularity.
+const PATCH_NONE := 0
+const PATCH_WARM := 1
+const PATCH_COOL := 2
+const PATCH_DUST := 3
+const PATCH_DAMP := 4
+static var _patch_k: PackedByteArray = PackedByteArray()
+static var _patch_a: PackedFloat32Array = PackedFloat32Array()
+static var _patch_cell: PackedByteArray = PackedByteArray()
+static var _base_cache: Dictionary = {}
+
 
 static func _t(map: ArenaMap, x: int, y: int) -> int:
 	return map.cell_type(Vector2i(x, y))
@@ -31,12 +43,83 @@ static func _is_low(map: ArenaMap, x: int, y: int) -> bool:
 	return _e(map, x, y) == 0 and t != ArenaMap.Cell.WALL
 
 
+static func _patchable(t: int) -> bool:
+	return t == ArenaMap.Cell.GRASS or t == ArenaMap.Cell.HIGH or t == ArenaMap.Cell.PATH
+
+
+static func _ensure_patches(map: ArenaMap) -> void:
+	if _patch_cell.size() == ArenaMap.W * ArenaMap.H:
+		return
+	_base_cache.clear()
+	var hw := ArenaMap.W * 8
+	var hh := ArenaMap.H * 8
+	var noise := FastNoiseLite.new()
+	noise.seed = 4242
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.frequency = 0.045
+	noise.fractal_octaves = 2
+	var data := noise.get_image(hw, hh, false, false, true).get_data()
+	_patch_k.resize(hw * hh)
+	_patch_a.resize(hw * hh)
+	_patch_cell.resize(ArenaMap.W * ArenaMap.H)
+	_patch_cell.fill(0)
+	for y in hh:
+		for x in hw:
+			var i := y * hw + x
+			_patch_k[i] = PATCH_NONE
+			_patch_a[i] = 0.0
+			var cx := x >> 3
+			var cy := y >> 3
+			var ct := map.cell_type(Vector2i(cx, cy))
+			if not _patchable(ct):
+				continue
+			var lane := ct == ArenaMap.Cell.PATH
+			var n := data[i] / 127.5 - 1.0
+			var a := 0.0
+			var k := PATCH_NONE
+			if n > 0.3:
+				a = 0.1 if n > 0.42 else (0.05 if (x + y) % 2 == 0 else 0.0)
+				k = PATCH_DUST if lane else PATCH_WARM
+			elif n < -0.3:
+				a = 0.11 if n < -0.42 else (0.055 if (x + y) % 2 == 0 else 0.0)
+				k = PATCH_DAMP if lane else PATCH_COOL
+			if a > 0.0:
+				if lane:
+					a *= 0.7
+				_patch_k[i] = k
+				_patch_a[i] = a
+				_patch_cell[cy * ArenaMap.W + cx] = 1
+
+
+static func _apply_patch(img: Image, x: int, y: int) -> void:
+	var hw := ArenaMap.W * 8
+	var cols := [Color.WHITE, Color(1.0, 0.95, 0.45), Color(0.0, 0.16, 0.1), Color(1.0, 0.9, 0.7), Color(0.22, 0.1, 0.04)]
+	for py in 16:
+		for px_ in 16:
+			var i := ((y * 16 + py) >> 1) * hw + ((x * 16 + px_) >> 1)
+			var a := _patch_a[i]
+			if a <= 0.0:
+				continue
+			var c := img.get_pixel(px_, py)
+			img.set_pixel(px_, py, c.lerp(cols[_patch_k[i]], a))
+
+
 ## Unique appearance key for a cell.
 static func cell_key(map: ArenaMap, x: int, y: int) -> String:
+	_ensure_patches(map)
+	var key := _cell_key_base(map, x, y)
+	if _patchable(_t(map, x, y)) and _patch_cell[y * ArenaMap.W + x] == 1:
+		key += "|P%d_%d" % [x, y]
+	return key
+
+
+static func _cell_key_base(map: ArenaMap, x: int, y: int) -> String:
 	var t := _t(map, x, y)
 	var d: int = map.deco[map.idx(x, y)]
 	match t:
 		ArenaMap.Cell.WALL:
+			if (x == 0 or x == ArenaMap.W - 1) and y > 0 and y < ArenaMap.H - 1:
+				return "wall_v"
 			return "wall"
 		ArenaMap.Cell.FACE:
 			var l := 0 if _is_face(map, x - 1, y) or _t(map, x - 1, y) == ArenaMap.Cell.RAMP else 1
@@ -99,12 +182,19 @@ static func cell_image(map: ArenaMap, x: int, y: int, key: String) -> Image:
 	var t := _t(map, x, y)
 	if key == "wall":
 		return TA.fence()
+	if key == "wall_v":
+		return TA.fence_side()
 	if t == ArenaMap.Cell.FACE:
 		return _face(map, x, y, key)
 	if t == ArenaMap.Cell.RAMP:
 		return _ramp(key.substr(5))
 	var parts := key.split("|")
-	var img := _base(parts[0])
+	if not _base_cache.has(parts[0]):
+		_base_cache[parts[0]] = _base(parts[0])
+	var img: Image = (_base_cache[parts[0]] as Image).duplicate()
+	if parts.size() > 2 and parts[2].begins_with("P"):
+		_ensure_patches(map)
+		_apply_patch(img, x, y)
 	var mask: String = parts[1] if parts.size() > 1 else ""
 	if mask.begins_with("r"):
 		_rims(img, mask)
@@ -192,51 +282,44 @@ static func _flowers_on(img: Image, v: int) -> Image:
 	return img
 
 
-## Canyon lane floor: packed dirt with pebbles, hairline cracks, roots and rat footprints.
+## Canyon lane floor: calm packed dirt (gameplay must pop on it) with soft clumps, a few
+## pebbles and one small detail per variant (crack / root / rat footprints).
 static func _lane(v: int) -> Image:
 	var img := PA.new_img(16, 16)
 	var base := PA.col("t").darkened(0.2)
+	var grain := base.darkened(0.11)
 	img.fill(base)
 	var r := RandomNumberGenerator.new()
 	r.seed = 4400 + v * 61
-	# mottling in soft clumps
-	for c in 6:
+	for c in 5:
 		var cx := r.randi_range(0, 15)
 		var cy := r.randi_range(0, 15)
-		var col := base.darkened(0.1) if c % 2 == 0 else base.lightened(0.07)
-		for k in r.randi_range(3, 7):
+		var col := base.darkened(0.05) if c % 2 == 0 else base.lightened(0.05)
+		for k in r.randi_range(4, 8):
 			PA.px(img, cx + r.randi_range(-2, 2), cy + r.randi_range(-1, 1), col)
-	for i in 14:
-		PA.px(img, r.randi_range(0, 15), r.randi_range(0, 15), PA.col("T"))
-	# pebbles: lit top, shadow below
-	for i in 2 + v:
-		var x := r.randi_range(1, 13)
-		var y := r.randi_range(1, 13)
-		var big := r.randf() < 0.4
-		PA.px(img, x, y, PA.col("l"))
+	for i in 7:
+		PA.px(img, r.randi_range(0, 15), r.randi_range(0, 15), grain)
+	# a pebble or two: lit top, soft shadow
+	for i in 1 + (1 if v == 1 else 0):
+		var x := r.randi_range(2, 12)
+		var y := r.randi_range(2, 12)
+		PA.px(img, x, y, PA.col("l").darkened(0.05))
 		PA.px(img, x + 1, y, PA.col("h"))
-		PA.px(img, x, y + 1, PA.col("H"))
-		PA.px(img, x + 1, y + 1, PA.col("B"))
-		if big:
-			PA.px(img, x + 2, y, PA.col("h"))
-			PA.px(img, x + 2, y + 1, PA.col("B"))
+		PA.px(img, x, y + 1, base.darkened(0.2))
+		PA.px(img, x + 1, y + 1, base.darkened(0.2))
+	var line_c := base.darkened(0.2)
 	match v:
 		0:
-			# hairline crack
-			PA.line(img, 3, 9, 6, 11, PA.col("B"))
-			PA.line(img, 6, 11, 9, 10, PA.col("B"))
-			PA.px(img, 7, 12, PA.col("B"))
+			PA.line(img, 4, 10, 6, 11, line_c)
+			PA.px(img, 7, 11, line_c)
 		1:
-			# exposed root
-			PA.line(img, 10, 3, 14, 5, PA.col("B"))
-			PA.px(img, 11, 3, PA.col("T"))
-			PA.px(img, 13, 4, PA.col("T"))
+			PA.line(img, 10, 4, 13, 5, PA.col("b"))
+			PA.px(img, 11, 4, PA.col("T"))
 		2:
-			# rat footprints heading east
-			for f in [Vector2i(2, 6), Vector2i(5, 8), Vector2i(8, 6), Vector2i(11, 8)]:
-				PA.px(img, f.x, f.y, PA.col("B"))
-				PA.px(img, f.x + 1, f.y - 1, PA.col("B"))
-				PA.px(img, f.x + 1, f.y + 1, PA.col("B"))
+			for f in [Vector2i(3, 6), Vector2i(7, 8), Vector2i(11, 6)]:
+				PA.px(img, f.x, f.y, line_c)
+				PA.px(img, f.x + 1, f.y - 1, line_c)
+				PA.px(img, f.x + 1, f.y + 1, line_c)
 	return img
 
 
@@ -285,8 +368,9 @@ static func _shadows(img: Image, mask: String) -> void:
 				img.set_pixel(x, y, p.darkened(amt))
 
 
-## Cliff face: overhanging grass lip with dangling blades + roots, topsoil, a lit ledge,
-## rock strata with mossy stones, and dark AO at the foot. Strata wobble lines up across tiles.
+## Cliff face: overhanging grass lip with dangling blades + roots, an earthen wall that darkens
+## towards the foot, a wavy darker stratum and a lit ledge, a few embedded rounded rocks with
+## moss, and dark AO at the base. Strata wobble lines up across neighbouring tiles.
 static func _face(map: ArenaMap, x: int, y: int, key: String) -> Image:
 	var img := PA.new_img(16, 16)
 	var bits := key.split("_")
@@ -296,61 +380,58 @@ static func _face(map: ArenaMap, x: int, y: int, key: String) -> Image:
 	var open_r := flags[1] == "1"
 	var r := RandomNumberGenerator.new()
 	r.seed = 8800 + v * 37
-	var soil := PA.col("b")
-	var soil_dk := PA.col("B")
-	var soil_lt := PA.col("T")
-	var rock := PA.col("H")
-	var stone := PA.col("h")
-	var stone_lt := PA.col("l")
+	var soil_top := PA.col("b").lerp(PA.col("T"), 0.45)
+	var soil_bot := PA.col("B").lerp(PA.col("b"), 0.35)
+	var stratum := PA.col("B")
+	var ledge := PA.col("T").lightened(0.12)
 	for xx in 16:
 		var w := int(roundf(sin(xx * TAU / 16.0)))
 		for yy in 16:
-			var c := soil
+			var c: Color
 			if yy <= 1:
 				c = PA.col("e").darkened(0.08)                 # grass lip (plateau colour)
 			elif yy == 2:
 				c = PA.col("E")
 			elif yy == 3:
-				c = soil_dk.darkened(0.25)                     # shadow under the lip
-			elif yy <= 6 + w:
-				c = soil if (xx + yy + v) % 5 != 0 else soil_lt  # topsoil
-			elif yy == 7 + w:
-				c = soil_lt.lightened(0.15)                    # little ledge catching light
-			elif yy <= 12 + w:
-				c = rock                                       # rock stratum
-			elif yy <= 13:
-				c = soil
-			elif yy == 14:
-				c = soil_dk.darkened(0.15)
-			else:
+				c = PA.col("B").darkened(0.35)                 # shadow under the lip
+			elif yy >= 15:
 				c = PA.col("K")
+			else:
+				var f := float(yy - 4) / 10.0
+				c = soil_top.lerp(soil_bot, f)
+				if (xx * 7 + yy * 3 + v) % 11 == 0:
+					c = c.lightened(0.1)
+				elif (xx * 5 + yy * 9 + v) % 13 == 0:
+					c = c.darkened(0.12)
+				if yy == 6 + w:
+					c = ledge if (xx + v) % 6 != 0 else c
+				elif yy == 10 + w:
+					c = stratum
+				elif yy == 14:
+					c = c.darkened(0.2)
 			img.set_pixel(xx, yy, c)
-	# stones in the rock band: lit tops, shaded bottoms, the odd moss patch
-	var sx := r.randi_range(0, 2)
-	while sx < 15:
-		var sw := r.randi_range(3, 5)
-		var sy := 8 + r.randi_range(0, 2)
-		for yy in range(sy, sy + 2 + r.randi_range(0, 1)):
-			for xx in range(sx, mini(sx + sw, 16)):
-				PA.px(img, xx, yy, stone)
-		for xx in range(sx, mini(sx + sw, 16)):
-			PA.px(img, xx, sy, stone_lt)
-			PA.px(img, xx, sy + 3, PA.col("K").lerp(rock, 0.4))
-		if r.randf() < 0.45:
-			PA.px(img, sx + 1, sy, PA.col("f"))
-			PA.px(img, sx + 2, sy, PA.col("E"))
-		sx += sw + r.randi_range(1, 2)
-	# dangling grass blades + hanging roots from the lip
+	# embedded rounded rocks
+	for i in 2 + v % 2:
+		var rx := r.randf_range(2.0, 13.0)
+		var ry := r.randf_range(8.5, 12.0)
+		var rw := r.randf_range(1.8, 2.8)
+		PA.ellipse(img, rx, ry, rw, 1.6, PA.col("H"))
+		PA.ellipse(img, rx - 0.4, ry - 0.4, rw - 0.8, 1.0, PA.col("h"))
+		PA.px(img, int(rx - rw + 1.0), int(ry - 1.0), PA.col("l"))
+		if r.randf() < 0.5:
+			PA.px(img, int(rx), int(ry - 1.6), PA.col("f"))
+			PA.px(img, int(rx) + 1, int(ry - 1.6), PA.col("E"))
+	# dangling blades + hanging roots from the lip
 	for xx in 16:
 		if (xx * 3 + v) % 5 == 0:
 			PA.px(img, xx, 3, PA.col("f"))
 			if (xx + v) % 2 == 0:
 				PA.px(img, xx, 4, PA.col("f").darkened(0.2))
 	for k in 2:
-		var rx := r.randi_range(1, 14)
+		var hx := r.randi_range(1, 14)
 		var ln := r.randi_range(2, 5)
 		for i in ln:
-			PA.px(img, rx + (1 if i == ln - 1 and k == 0 else 0), 4 + i, soil_dk)
+			PA.px(img, hx + (1 if i == ln - 1 and k == 0 else 0), 4 + i, PA.col("B").darkened(0.15))
 	# a vine on variant 2
 	if v == 2:
 		var vx := r.randi_range(4, 11)

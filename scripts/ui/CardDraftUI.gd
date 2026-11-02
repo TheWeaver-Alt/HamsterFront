@@ -56,6 +56,8 @@ var _quiz_for := -1              # player index the quiz is currently asking
 var _ask_t := 0.0
 var _star_pop: Array = []        # per player: "+1 STAR" flash timer
 var _all_picked_t := 0.0
+var _last_cur: Array = []        # per player: cursor last frame (for the hover wiggle)
+const FLIP_TIME := 0.24
 
 
 func _ready() -> void:
@@ -82,6 +84,7 @@ func open(pls: Array) -> void:
 	_all_picked_t = 0.0
 	_cards.clear()
 	_parts.clear()
+	_last_cur.clear()
 	var offered: Array = []
 	for p in players:
 		var hand: Array = CardDB.roll_hand(p, 3, offered)
@@ -93,6 +96,7 @@ func open(pls: Array) -> void:
 		pick_time.append(0.0 if hand.is_empty() else -1.0)
 		awaiting.append(false)
 		_star_pop.append(0.0)
+		_last_cur.append(cursor[cursor.size() - 1])
 		# swallow whatever is currently held so nothing auto-picks
 		p.input.update(p)
 		p.input.consume()
@@ -144,6 +148,8 @@ func _make_card_fx(pi: int, k: int, order: int) -> Dictionary:
 		"rot": 0.0,
 		"scale": 0.2,
 		"exit": 0.0,             # flourish progress
+		"flip": 0.0,             # 0 = back facing us .. 1 = revealed (starts when it lands)
+		"wig": 0.0,              # hover wiggle energy
 	}
 
 
@@ -189,6 +195,7 @@ func _process(delta: float) -> void:
 	_jiggle = maxf(0.0, _jiggle - delta * 6.0)
 	_freeze_flash = maxf(0.0, _freeze_flash - delta * 3.0)
 	_update_particles(delta)
+	_update_card_anims(delta)
 	match _state:
 		S.DROP:
 			_update_drop(delta)
@@ -202,6 +209,23 @@ func _process(delta: float) -> void:
 		S.LEAVE:
 			_update_leave(delta)
 	queue_redraw()
+
+
+## Flip-in reveal after landing, and a little wiggle when a cursor moves onto a card.
+func _update_card_anims(delta: float) -> void:
+	for c in _cards:
+		if float(c["flight"]) >= 1.0 and float(c["flip"]) < 1.0:
+			var before: float = c["flip"]
+			c["flip"] = minf(1.0, before + delta / FLIP_TIME)
+			if before < 0.5 and float(c["flip"]) >= 0.5:
+				Sfx.play("tick", 1.4 + c["k"] * 0.1, -10.0)
+		c["wig"] = maxf(0.0, float(c["wig"]) - delta * 3.5)
+	for i in mini(cursor.size(), _last_cur.size()):
+		if cursor[i] != _last_cur[i]:
+			_last_cur[i] = cursor[i]
+			for c in _cards:
+				if c["p"] == i and c["k"] == cursor[i]:
+					c["wig"] = 1.0
 
 
 func _update_drop(delta: float) -> void:
@@ -595,9 +619,22 @@ func _draw_card_fx(c: Dictionary) -> void:
 	if card["tier"] == "cursed" and _state == S.PICK and not picked[pi]:
 		wob = Vector2(roundf(sin(_age * 9.0 + k) * 1.0), 0)
 	var center := pos + sz * s / 2.0 + Vector2(0, lift) + wob
-	draw_set_transform(center.round() + _shake_v, c["rot"], Vector2(s, s))
+	# flip-in: back face while flying / first half of the flip, then the front
+	var flip: float = c["flip"]
+	var landed := float(c["flight"]) >= 1.0
+	var sx := 1.0
+	var show_back := not landed or flip < 0.5
+	if landed and flip < 1.0:
+		sx = maxf(0.08, absf(cos(flip * PI)))
+	var rot: float = c["rot"] + sin(_age * 38.0) * 0.07 * float(c["wig"])
+	var squash := 1.0 + 0.06 * float(c["wig"]) * sin(_age * 30.0)
+	draw_set_transform(center.round() + _shake_v, rot, Vector2(s * sx * squash, s / squash))
 	var r := Rect2(-sz / 2.0, sz).abs()
 	r.position = r.position.round()
+	if show_back:
+		_draw_card_back(r, CardDB.tier_color(card["tier"]))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return
 	_draw_card_body(card, r, players[pi], is_cursor, chosen, dim)
 	if is_cursor:
 		var pc: Color = MechPlayer.PLAYER_COLORS[clampi(pi, 0, 1)]
@@ -671,11 +708,11 @@ func _draw_card_body(card: Dictionary, r: Rect2, player, is_cursor: bool, chosen
 	draw_rect(Rect2(tx, y + 1, tw, 1), tc.darkened(0.2))
 	y += 4
 	var desc_ink := Color8(70, 50, 80) if not dim else Color8(70, 60, 70)
-	y = _wrap_text(Vector2(tx, y), card["desc"], tw, desc_ink, false)
+	y = _wrap_text(Vector2(tx, y), card["desc"], tw, desc_ink, false, r.end.y - (24.0 if card.has("downside") else 9.0))
 	if card.has("downside"):
 		y += 2
 		PixelArt.draw_text(self, Vector2(tx, y), "BUT:", PixelArt.C["R"] if not dim else ink)
-		y = _wrap_text(Vector2(tx, y + 7), card["downside"], tw, Color8(24, 110, 50) if not dim else ink, false)
+		y = _wrap_text(Vector2(tx, y + 7), card["downside"], tw, Color8(24, 110, 50) if not dim else ink, false, r.end.y - 9.0)
 	# stack counter
 	var owned := CardDB.times_owned(card, player)
 	var mx := int(card.get("max", 99))
@@ -686,10 +723,54 @@ func _draw_card_body(card: Dictionary, r: Rect2, player, is_cursor: bool, chosen
 		PixelArt.draw_text(self, Vector2(r.position.x + 4, r.end.y - 8), "TEAM", tc.darkened(0.3))
 	elif card.has("gmods") and not card.has("mods"):
 		PixelArt.draw_text(self, Vector2(r.position.x + 4, r.end.y - 8), "ALL", tc.darkened(0.3))
+	# shine sweep on rare (synergy / blueprint) and cursed cards
+	if not dim and (tier == "synergy" or tier == "cursed" or tier == "tower"):
+		_draw_shine(r, 0.45 if tier != "tower" else 0.25, Color(0.85, 1.0, 0.7) if cursed else Color(1, 1, 1))
+
+
+## Diagonal light band sweeping across a card every couple of seconds.
+func _draw_shine(r: Rect2, strength: float, col: Color) -> void:
+	var span := r.size.x + r.size.y * 0.5 + 16.0
+	var ph := fmod(_age * 0.55 + r.position.x * 0.003, 1.6)
+	if ph > 1.0:
+		return
+	var head := r.position.x - 8.0 + ph * span
+	for yy in range(int(r.position.y) + 2, int(r.end.y) - 2):
+		var x0 := head - (yy - r.position.y) * 0.5
+		for k in 3:
+			var x := roundf(x0 + k * 2.0)
+			if x > r.position.x + 1.0 and x < r.end.x - 2.0:
+				draw_rect(Rect2(x, yy, 1 if k != 1 else 2, 1), Color(col, strength * (0.6 if k != 1 else 1.0)))
+
+
+## The back of a card: purple foil, diagonal stripes and a big striped seed emblem.
+func _draw_card_back(r: Rect2, tier_col: Color) -> void:
+	draw_rect(Rect2(r.position + Vector2(2, 3), r.size), Color(0, 0, 0, 0.35))
+	PixelArt.draw_box(self, r, Color8(72, 40, 96), K)
+	var inner := r.grow(-3)
+	draw_rect(inner, Color8(92, 52, 124))
+	for yy in range(int(inner.position.y), int(inner.end.y), 2):
+		var off := int(yy) % 8
+		for xx in range(int(inner.position.x) + off, int(inner.end.x), 8):
+			draw_rect(Rect2(xx, yy, 2, 1), Color8(110, 66, 146))
+	var fr := inner.grow(-3)
+	var oc := tier_col.darkened(0.2)
+	draw_rect(Rect2(fr.position, Vector2(fr.size.x, 1)), oc)
+	draw_rect(Rect2(fr.position + Vector2(0, fr.size.y - 1), Vector2(fr.size.x, 1)), oc)
+	draw_rect(Rect2(fr.position, Vector2(1, fr.size.y)), oc)
+	draw_rect(Rect2(fr.position + Vector2(fr.size.x - 1, 0), Vector2(1, fr.size.y)), oc)
+	var c := r.get_center().round()
+	PixelArt.draw_disk(self, c, 10.0, Color8(46, 28, 64))
+	# seed emblem
+	draw_rect(Rect2(c + Vector2(-3, -6), Vector2(6, 12)), PixelArt.C["s"])
+	draw_rect(Rect2(c + Vector2(-2, -7), Vector2(4, 14)), PixelArt.C["s"])
+	draw_rect(Rect2(c + Vector2(-1, -5), Vector2(2, 10)), PixelArt.C["S"])
+	draw_rect(Rect2(c + Vector2(-3, -6), Vector2(1, 1)), PixelArt.C["y"])
+	PixelArt.draw_text_centered(self, Vector2(c.x, r.end.y - 12), "SNAX", PixelArt.C["y"], false)
 
 
 ## Draws word-wrapped text, returns the y below the last line.
-func _wrap_text(pos: Vector2, text: String, width: float, col: Color, centered: bool) -> float:
+func _wrap_text(pos: Vector2, text: String, width: float, col: Color, centered: bool, max_y: float = 99999.0) -> float:
 	var lines: PackedStringArray = []
 	var line := ""
 	for word in text.split(" ", false):
@@ -702,13 +783,17 @@ func _wrap_text(pos: Vector2, text: String, width: float, col: Color, centered: 
 	if line != "":
 		lines.append(line)
 	var y := pos.y
+	# long texts tighten their line spacing so they stay inside the card
+	var step := 7.0
+	if lines.size() > 1 and pos.y + lines.size() * 7.0 > max_y:
+		step = maxf(6.0, floorf((max_y - pos.y) / lines.size()))
 	for l in lines:
 		if centered:
 			var lw := PixelArt.text_width(l)
 			PixelArt.draw_text(self, Vector2(roundf(pos.x + (width - lw) / 2.0), y), l, col)
 		else:
 			PixelArt.draw_text(self, Vector2(pos.x, y), l, col)
-		y += 7
+		y += step
 	return y
 
 

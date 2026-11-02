@@ -5,7 +5,7 @@ extends RatBrain
 const GAS_EVERY := 2.5
 const GAS_NEAR_TOWER := 1.5
 const TOWER_SEEK := 110.0
-const HAND := Vector2(4, -9)
+const RA := preload("res://scripts/art/RatArt.gd")
 const BARKS := [
 	"Breathe-breathe the holy stink!",
 	"Pestilence-blessings for all-all!",
@@ -18,6 +18,7 @@ var tower = null
 var _seek_t := 0.0
 var _flail_a := 0.0
 var _flail_spd := 7.0
+var _pose_key := "walk_0"
 
 
 func setup(r: RatEnemy) -> void:
@@ -89,31 +90,52 @@ func _drop_gas() -> void:
 		JuiceManager.bark(rat, BARKS[randi() % BARKS.size()], "rat", false, 8.0)
 
 
+## Paw that holds the chain, in local space (follows the walk / chant frames).
+func _hand() -> Vector2:
+	var hp: Vector2i = RA.MONK_HAND.get(_pose_key, Vector2i(14, 12))
+	return Vector2((hp.x - 10) * rat.facing, hp.y - 21) + rat.vis_off
+
+
 func _cheese_off() -> Vector2:
-	var hand := Vector2(HAND.x * rat.facing, HAND.y)
-	return hand + Vector2(cos(_flail_a) * 9.0, sin(_flail_a) * 4.0)
+	return _hand() + Vector2(cos(_flail_a) * 9.0, sin(_flail_a) * 4.0)
 
 
 func draw(ci: RatEnemy) -> void:
+	var pose := "walk"
+	var f := ci.walk_frame() if ci.moving() else 0
+	if not ci.moving() or _flail_spd > 10.0:
+		pose = "chant"
+		f = int(ci.anim_t * 3.0) % 2
+	_pose_key = "%s_%d" % [pose, f]
 	var behind := sin(_flail_a) < 0.0
 	if behind:
 		_draw_flail(ci)
-	ci.draw_sprite("rat_monk_%d" % ci.anim_frame())
+	ci.draw_sprite("rat_monk_%s" % _pose_key)
 	if not behind:
 		_draw_flail(ci)
 
 
+func spawn_sprite(_ci: RatEnemy) -> String:
+	return "rat_monk_walk_0"
+
+
 func _draw_flail(ci: RatEnemy) -> void:
-	var hand := Vector2(HAND.x * ci.facing, HAND.y)
+	var hand := _hand()
 	var tip := _cheese_off()
-	for i in range(1, 4):
-		var p := hand.lerp(tip, i / 4.0)
-		ci.draw_rect(Rect2(p.round(), Vector2(1, 1)), PixelArt.C["g"])
+	# chain links alternate light / dark
+	for i in range(1, 5):
+		var p := hand.lerp(tip, i / 5.0)
+		ci.draw_rect(Rect2(p.round(), Vector2(1, 1)), PixelArt.C["W"] if i % 2 == 0 else PixelArt.C["G"])
 	var c := tip.round()
-	# moldy cheese wedge with an outline, holes and fuzzy green mold
-	ci.draw_rect(Rect2(c + Vector2(-3, -2), Vector2(6, 5)), PixelArt.C["k"])
-	ci.draw_rect(Rect2(c + Vector2(-2, -1), Vector2(4, 3)), PixelArt.C["y"])
-	ci.draw_rect(Rect2(c + Vector2(-2, -1), Vector2(4, 1)), PixelArt.C["I"])
-	ci.draw_rect(Rect2(c + Vector2(0, 0), Vector2(1, 1)), PixelArt.C["Y"])
+	# moldy cheese wedge: outline, rind, holes and fuzzy green mould
+	ci.draw_rect(Rect2(c + Vector2(-3, -2), Vector2(7, 5)), PixelArt.C["k"])
+	ci.draw_rect(Rect2(c + Vector2(-2, -1), Vector2(5, 3)), PixelArt.C["y"])
+	ci.draw_rect(Rect2(c + Vector2(-2, -1), Vector2(5, 1)), PixelArt.C["I"])
+	ci.draw_rect(Rect2(c + Vector2(1, 0), Vector2(1, 1)), PixelArt.C["Y"])
+	ci.draw_rect(Rect2(c + Vector2(-1, 1), Vector2(1, 1)), PixelArt.C["Y"])
 	ci.draw_rect(Rect2(c + Vector2(-2, 1), Vector2(1, 1)), PixelArt.C["Z"])
-	ci.draw_rect(Rect2(c + Vector2(1, -1), Vector2(1, 1)), PixelArt.C["x"])
+	ci.draw_rect(Rect2(c + Vector2(2, -1), Vector2(1, 1)), PixelArt.C["x"])
+	ci.draw_rect(Rect2(c + Vector2(-3, -3), Vector2(1, 1)), PixelArt.C["Z"])
+	# stink wisps
+	var w := int(ci.anim_t * 4.0) % 3
+	ci.draw_rect(Rect2(c + Vector2(-1 + w, -4 - w), Vector2(1, 1)), Color(0.67, 1.0, 0.4, 0.7))

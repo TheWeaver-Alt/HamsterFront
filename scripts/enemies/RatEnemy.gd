@@ -65,6 +65,21 @@ var _stuck_t := 0.0
 var _burn_fx_t := 0.0
 var _silo_bark_done := false
 
+# visuals only (no gameplay effect)
+const CorpseScript := preload("res://scripts/enemies/RatCorpses.gd")
+var variant := 0              # swarm look variant (squeakers: plain / eyepatch / scar / bandana)
+var atk_anim := 0.0           # bite lunge timer
+var hit_anim := 0.0           # flinch timer
+var sneeze_t := 0.0           # sneezing-powder fit (mortar stun)
+var zap_anim := 0.0           # tesla x-ray flash
+var emerge_t := 0.0           # hop out of the burrow
+var spawn_total := 0.0
+var idle_seed := 0.0
+var vis_off := Vector2.ZERO   # applied by draw_sprite()
+var _status_mod := Color.WHITE
+var _flash_sent := -1.0
+var _drip_t := 0.0
+
 
 func setup(k: String, hp_mult: float = 1.0, speed_mult: float = 1.0) -> void:
 	kind = k
@@ -81,6 +96,8 @@ func setup(k: String, hp_mult: float = 1.0, speed_mult: float = 1.0) -> void:
 	is_boss = cfg.get("boss", false)
 	chewer = randf() < 0.25
 	personal_offset = Vector2(randf_range(-5, 5), randf_range(-5, 5))
+	variant = randi() % 4
+	idle_seed = randf() * 10.0
 	_frame_i = randi() % 3
 	var path := "res://scripts/enemies/brains/%sBrain.gd" % cfg["brain"]
 	if not ResourceLoader.exists(path):
@@ -117,9 +134,17 @@ func _physics_process(delta: float) -> void:
 	_frame_i += 1
 	anim_t += delta
 	_flash = maxf(0.0, _flash - delta * 8.0)
-	(material as ShaderMaterial).set_shader_parameter("flash", _flash)
+	if _flash != _flash_sent:
+		_flash_sent = _flash
+		(material as ShaderMaterial).set_shader_parameter("flash", _flash)
+	_tick_visuals(delta)
 	if spawn_t > 0.0:
+		if spawn_total <= 0.0:
+			spawn_total = spawn_t
 		spawn_t -= delta
+		if spawn_t <= 0.0:
+			emerge_t = 0.3
+			GameManager.arena.fx.dust(global_position, 4 + int(mass))
 		queue_redraw()
 		return
 	# statuses
@@ -283,6 +308,7 @@ func _bite_target() -> void:
 	if bite_t > 0.0 or bite_dmg <= 0.0:
 		return
 	bite_t = bite_rate
+	atk_anim = 0.3
 	if target is MechPlayer:
 		target.take_damage(bite_dmg, global_position)
 	elif target.has_method("take_damage"):
@@ -295,6 +321,7 @@ func _bite_silo() -> void:
 	if bite_t > 0.0 or bite_dmg <= 0.0:
 		return
 	bite_t = bite_rate
+	atk_anim = 0.3
 	GameManager.damage_silo(bite_dmg)
 	GameManager.arena.on_silo_hit(global_position)
 	if not _silo_bark_done and randf() < 0.12:
@@ -325,6 +352,13 @@ func take_damage(amount: float, from_pos: Vector2 = Vector2.INF, knockback: floa
 	var stun: float = info.get("stun", 0.0)
 	if stun > 0.0:
 		stun_t = maxf(stun_t, stun / (2.0 if is_boss else 1.0))
+	var dmg_kind: String = String(info.get("kind", ""))
+	if dmg_kind == "mortar" and stun > 0.0:
+		sneeze_t = maxf(sneeze_t, stun_t)
+	elif dmg_kind == "zap":
+		zap_anim = 0.2
+	if not quiet:
+		hit_anim = 0.16
 	var m: float = info.get("melt", 0.0)
 	if m > 0.0:
 		melt = minf(1.0, maxf(melt, m))
@@ -362,40 +396,130 @@ func die(info: Dictionary = {}) -> void:
 	if owner_node != null and is_instance_valid(owner_node) and owner_node.has_method("on_kill"):
 		owner_node.on_kill(self)
 	brain.on_death(info)
+	_spawn_corpse(arena)
 	died.emit(self)
 	arena.unregister_enemy(self)
 	queue_free()
 
 
-# ------------------------------------------------------------------ draw
+## Hands a snapshot to the shared corpse layer so the death animation outlives this node.
+func _spawn_corpse(arena) -> void:
+	if arena == null or not is_instance_valid(arena) or arena.world == null:
+		return
+	var layer = arena.world.get_node_or_null("RatCorpses")
+	if layer == null:
+		layer = Node2D.new()
+		layer.name = "RatCorpses"
+		layer.set_script(CorpseScript)
+		arena.world.add_child(layer)
+	layer.add_corpse(brain.corpse_data(self))
 
+
+# ------------------------------------------------------------------ visuals
+
+func _tick_visuals(delta: float) -> void:
+	atk_anim = maxf(0.0, atk_anim - delta)
+	hit_anim = maxf(0.0, hit_anim - delta)
+	zap_anim = maxf(0.0, zap_anim - delta)
+	emerge_t = maxf(0.0, emerge_t - delta)
+	if sneeze_t > 0.0:
+		sneeze_t = maxf(0.0, sneeze_t - delta)
+	# status tint: burning chars the fur, laser melt glows icy blue
+	if burn_t > 0.0:
+		var fl := 0.85 + 0.15 * sin(anim_t * 30.0)
+		_status_mod = Color(fl, 0.62 * fl, 0.45 * fl)
+	elif melt > 0.0:
+		_status_mod = Color(0.72, 0.95, 1.25)
+		_drip_t -= delta
+		if _drip_t <= 0.0:
+			_drip_t = randf_range(0.12, 0.3)
+			GameManager.arena.fx.particle(global_position + Vector2(randf_range(-radius, radius), -radius * 1.4),
+				Vector2(randf_range(-6, 6), 10.0), 0.5, PixelArt.C["u"], 1.0, 160.0, 1.0)
+	else:
+		_status_mod = Color.WHITE
+	# offsets: hop out of the burrow, flinch away from the hit
+	vis_off = Vector2.ZERO
+	if emerge_t > 0.0:
+		vis_off.y = -roundf(sin(emerge_t / 0.3 * PI) * 4.0)
+	if hit_anim > 0.0 and knock.length() > 5.0:
+		vis_off.x = signf(knock.x)
+
+
+func moving() -> bool:
+	return velocity.length() > 2.0
+
+
+## 4-frame scurry cycle, speed-matched.
+func walk_frame() -> int:
+	return int(anim_t * (7.0 + speed * 0.12)) % 4
+
+
+## Legacy 2-frame helper.
 func anim_frame() -> int:
-	return int(anim_t * (6.0 + speed * 0.08)) % 2 if velocity.length() > 2.0 else 0
+	return int(anim_t * (6.0 + speed * 0.08)) % 2 if moving() else 0
 
 
-## Draws a RatArt sprite centred horizontally with its feet at the origin.
+func idle_frame() -> int:
+	return int((anim_t + idle_seed) * 2.2) % 2
+
+
+func spawn_progress() -> float:
+	if spawn_total <= 0.0:
+		return 1.0
+	return clampf(1.0 - spawn_t / spawn_total, 0.0, 1.0)
+
+
+## Draws a RatArt sprite centred horizontally with its feet at the origin (plus vis_off), tinted
+## by the current status (burn / melt).
 func draw_sprite(sprite_name: String, offset: Vector2 = Vector2.ZERO, modulate_c: Color = Color.WHITE) -> void:
 	var t := PixelArt.tex(sprite_name)
 	var sz := t.get_size()
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(facing, 1))
-	draw_texture(t, Vector2(-roundf(sz.x / 2.0), -sz.y + 1) + offset, modulate_c)
+	draw_set_transform(vis_off, 0.0, Vector2(facing, 1))
+	draw_texture(t, Vector2(-roundf(sz.x / 2.0), -sz.y + 1) + offset, modulate_c * _status_mod)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## A single pixel in sprite-image coordinates (same transform as draw_sprite) — for eye glows etc.
+func draw_sprite_px(sprite_size: Vector2, px: Vector2, color: Color, size: Vector2 = Vector2.ONE, offset: Vector2 = Vector2.ZERO) -> void:
+	draw_set_transform(vis_off, 0.0, Vector2(facing, 1))
+	draw_rect(Rect2(Vector2(-roundf(sprite_size.x / 2.0), -sprite_size.y + 1) + px + offset, size), color)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw() -> void:
 	if spawn_t > 0.0:
-		# crawling out of the burrow: only the head pokes out
 		brain.draw_spawning(self)
 		return
-	draw_rect(Rect2(-radius, -1, radius * 2.0, 2), Color(0, 0, 0, 0.25))
+	# soft pixel shadow (stays on the ground while hopping)
+	var sw := radius * 2.0 + 2.0
+	draw_rect(Rect2(-roundf(sw / 2.0), -1, roundf(sw), 2), Color(0.05, 0.03, 0.08, 0.22))
+	draw_rect(Rect2(-roundf(sw / 2.0) + 1, -2, roundf(sw) - 2, 1), Color(0.05, 0.03, 0.08, 0.12))
 	brain.draw(self)
+	var top := -radius * 2.0 - 6.0 + vis_off.y
+	# burning: flickering flame sprites licking up the body
+	if burn_t > 0.0:
+		var ff := int(anim_t * 12.0) % 3
+		var fl := PixelArt.tex("rat_fx_flame_%d" % ff)
+		draw_texture(fl, Vector2(-3, -radius * 1.8 - 6.0 + vis_off.y).round())
+		if radius >= 6.0:
+			draw_texture(PixelArt.tex("rat_fx_flame_%d" % ((ff + 1) % 3)), Vector2(radius * 0.6 - 3.0, -radius * 1.2 - 5.0).round())
+	# stunned / tripped: orbiting dizzy stars
 	if stun_t > 0.0 or trip_t > 0.0:
 		var a := anim_t * 8.0
-		var top := Vector2(0, -radius * 2.0 - 8.0)
+		var st := Vector2(0, top - 2.0)
 		for i in 3:
-			var p := top + Vector2(cos(a + i * TAU / 3.0) * 5.0, sin(a + i * TAU / 3.0) * 1.5)
-			draw_rect(Rect2(p.round(), Vector2(1, 1)), Color8(255, 214, 64))
-	if melt > 0.0 and int(anim_t * 10.0) % 2 == 0:
-		draw_rect(Rect2(-1, -radius * 2.0 - 3.0, 2, 1), Color8(90, 200, 230))
+			var p := st + Vector2(cos(a + i * TAU / 3.0) * (radius + 1.0), sin(a + i * TAU / 3.0) * 1.5)
+			var c := Color8(255, 214, 64) if i != 1 else Color8(255, 248, 231)
+			draw_rect(Rect2(p.round(), Vector2(1, 1)), c)
+			if int(anim_t * 10.0 + i) % 3 == 0:
+				draw_rect(Rect2(p.round() + Vector2(0, -1), Vector2(1, 1)), Color(1, 0.9, 0.4, 0.6))
+	# laser melt: icy drip forming under the chin
+	if melt > 0.0 and int(anim_t * 6.0) % 2 == 0:
+		draw_rect(Rect2(Vector2(facing * radius * 0.8, -2), Vector2(1, 2)), Color8(90, 200, 230))
+	# tesla zap: crackle around non-squeakers (squeakers flash their skeleton instead)
+	if zap_anim > 0.0 and kind != "squeaker":
+		for i in 4:
+			var zp := Vector2(randf_range(-radius, radius), randf_range(-radius * 2.0, 0)).round()
+			draw_rect(Rect2(zp, Vector2(1, 1)), Color8(150, 220, 255) if i % 2 == 0 else Color.WHITE)
 	if is_boss == false and hp < max_hp and max_hp >= 30.0:
-		PixelArt.draw_bar(self, Rect2(-6, -radius * 2.0 - 6.0, 12, 1), hp / max_hp, Color8(170, 255, 100), Color8(26, 16, 32), false)
+		PixelArt.draw_bar(self, Rect2(-6, top, 12, 1), hp / max_hp, Color8(170, 255, 100), Color8(26, 16, 32), false)

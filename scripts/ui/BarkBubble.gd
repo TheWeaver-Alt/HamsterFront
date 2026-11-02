@@ -77,7 +77,7 @@ func _process(delta: float) -> void:
 	if get_tree().paused and style != "system":
 		return
 	age += delta
-	_pop = minf(1.0, _pop + delta * 9.0)
+	_pop = minf(1.0, _pop + delta * 5.5)
 	var prev := int(_shown)
 	_shown = minf(float(_total_chars), _shown + delta * CHARS_PER_SEC)
 	var now := int(_shown)
@@ -92,6 +92,14 @@ func _process(delta: float) -> void:
 		return
 	_update_pos()
 	queue_redraw()
+
+
+## easeOutBack: 0 -> 1 with a springy overshoot.
+static func _back(x: float) -> float:
+	var c1 := 2.2
+	var c3 := c1 + 1.0
+	var u := x - 1.0
+	return 1.0 + c3 * u * u * u + c1 * u * u
 
 
 func _blip() -> void:
@@ -116,14 +124,16 @@ func _update_pos() -> void:
 func _draw() -> void:
 	if not active or _lines.is_empty():
 		return
-	var fade := clampf((_life - age) / 0.3, 0.0, 1.0)
+	var out_t := clampf((_life - age) / 0.3, 0.0, 1.0)   # 1 -> 0 while leaving
+	var fade := out_t
 	var widest := 0
 	for l in _lines:
 		widest = maxi(widest, PixelArt.text_width(l))
-	var w := widest + 6
-	var h := _lines.size() * 7 + 4
-	var s := 0.6 + 0.4 * _pop
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(s, s))
+	var w := widest + 8
+	var h := _lines.size() * 7 + 5
+	var s := 0.35 + 0.65 * _back(_pop)
+	var rise := -roundf((1.0 - out_t) * 4.0)
+	draw_set_transform(Vector2(0, rise), 0.0, Vector2(s, s))
 	var fill: Color
 	var border: Color
 	var ink: Color
@@ -147,31 +157,57 @@ func _draw() -> void:
 	fill.a *= fade
 	border.a *= fade
 	ink.a *= fade
-	var r := Rect2(-w / 2, -h, w, h)
+	var shake := Vector2.ZERO
+	if style == "boss" and age < 0.5:
+		shake = Vector2(randi_range(-1, 1), 0)
+	var r := Rect2(Vector2(-w / 2, -h) + shake, Vector2(w, h))
+	# drop shadow
+	draw_rect(Rect2(r.position + Vector2(2, 2), r.size), Color(0.1, 0.06, 0.12, 0.35 * fade))
 	PixelArt.draw_box(self, r, fill, border)
-	# tail
+	# inner bevel: light top edge, dark bottom edge
+	var hi := fill.lightened(0.3)
+	var lo := fill.darkened(0.18)
+	draw_rect(Rect2(r.position.x + 2, r.position.y + 1, r.size.x - 4, 1), hi)
+	draw_rect(Rect2(r.position.x + 2, r.end.y - 2, r.size.x - 4, 1), lo)
 	if style == "rat":
-		draw_rect(Rect2(-1, 0, 2, 1), border)
-		draw_rect(Rect2(1, 1, 2, 1), border)
-		draw_rect(Rect2(-1, 2, 2, 1), border)
+		# jagged, chittering edges
+		for x in range(int(r.position.x) + 3, int(r.end.x) - 3, 4):
+			draw_rect(Rect2(x, r.position.y - 1, 1, 1), border)
+			draw_rect(Rect2(x + 2, r.end.y, 1, 1), border)
+	elif style == "boss":
+		draw_rect(Rect2(r.position - Vector2(1, 1), Vector2(r.size.x + 2, 1)), border)
+		draw_rect(Rect2(r.position + Vector2(-1, r.size.y), Vector2(r.size.x + 2, 1)), border)
+		for x in [r.position.x + 2, r.end.x - 4]:
+			draw_rect(Rect2(x, r.position.y - 3, 2, 2), border)
+	# tail (wobbles while talking)
+	var tx := roundf(sin(age * 9.0) * 1.0) if _shown < float(_total_chars) else 0.0
+	var ty := r.end.y
+	if style == "rat":
+		draw_rect(Rect2(tx - 1, ty, 2, 1), border)
+		draw_rect(Rect2(tx + 1, ty + 1, 2, 1), border)
+		draw_rect(Rect2(tx - 1, ty + 2, 2, 1), border)
 	else:
-		draw_rect(Rect2(-2, 0, 4, 1), border)
-		draw_rect(Rect2(-1, 0, 2, 1), fill)
-		draw_rect(Rect2(-1, 1, 2, 1), border)
-		draw_rect(Rect2(0, 2, 1, 1), border)
+		draw_rect(Rect2(tx - 3, ty - 1, 6, 1), fill)
+		draw_rect(Rect2(tx - 3, ty, 6, 1), border)
+		draw_rect(Rect2(tx - 2, ty, 4, 1), fill)
+		draw_rect(Rect2(tx - 2, ty + 1, 4, 1), border)
+		draw_rect(Rect2(tx - 1, ty + 1, 2, 1), fill)
+		draw_rect(Rect2(tx - 1 + signf(tx), ty + 2, 2, 1), border)
 	var remaining := int(_shown)
-	var y := -h + 3
+	var y := r.position.y + 3
 	for l in _lines:
 		if remaining <= 0:
 			break
 		var part := l.substr(0, mini(remaining, l.length()))
 		remaining -= l.length()
 		var lw := PixelArt.text_width(l) - 1
-		var x := -lw / 2
-		# shake rat text for manic energy
+		var x := r.position.x + roundf((w - lw) / 2.0)
 		var jitter := Vector2.ZERO
-		if style == "rat" or style == "boss":
-			jitter = Vector2(randi_range(-1, 0), 0) if randf() < 0.15 else Vector2.ZERO
+		if (style == "rat" or style == "boss") and randf() < 0.15:
+			jitter = Vector2(randi_range(-1, 0), 0)
 		PixelArt.draw_text(self, Vector2(x, y) + jitter, part, ink)
+		# blinking caret while typing
+		if remaining < 0 and int(age * 8.0) % 2 == 0 and _shown < float(_total_chars):
+			draw_rect(Rect2(x + PixelArt.text_width(part), y + 4, 2, 1), ink)
 		y += 7
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

@@ -4,8 +4,8 @@ extends TowerBrain
 ## Mutation "decoy_confetti": bursts into confetti shrapnel when chewed apart.
 ## Sugar Rush: self-repairs, taunts from further away and the eyes spin like mad.
 
-const EYE_L := Vector2(-2.5, -15.5)
-const EYE_R := Vector2(3.5, -15.5)
+const EYE_L := Vector2(-3.5, -17.5)
+const EYE_R := Vector2(3.5, -17.5)
 const BARKS := [
 	"I AM DEFINITELY A REAL HAMSTER.",
 	"Squeak. Squeak. (cardboard noises)",
@@ -19,6 +19,23 @@ var _wob := 0.0
 var _wob_v := 0.0
 var _t := 0.0
 var _bark_cd := 6.0
+var _hop := 0.0          # excited hop height when rats are close
+var _hop_v := 0.0
+var _hop_cd := 1.0
+var _near := false
+var _near_ref = null
+var _scan_t := 0.0
+
+
+func _tex_name() -> String:
+	var d := 0
+	if tower.hp < tower.max_hp * 0.3:
+		d = 2
+	elif tower.hp < tower.max_hp * 0.65:
+		d = 1
+	if d == 0:
+		return "tower_decoy_%d" % tower.level
+	return "tower_decoy_%d_d%d" % [tower.level, d]
 
 
 func draws_base() -> bool:
@@ -32,9 +49,15 @@ func taunt_radius() -> float:
 func physics(delta: float) -> void:
 	_t += delta
 	_bark_cd = maxf(0.0, _bark_cd - delta)
-	# look at the nearest rat
+	# look at the nearest rat (spatial query a few times a second is plenty)
 	var look := Vector2.ZERO
-	var near = GameManager.arena.nearest_enemy(tower.global_position, taunt_radius())
+	_scan_t -= delta
+	if _scan_t <= 0.0:
+		_scan_t = 0.12
+		_near_ref = GameManager.arena.nearest_enemy(tower.global_position, taunt_radius())
+	if _near_ref != null and not (is_instance_valid(_near_ref) and _near_ref.alive):
+		_near_ref = null
+	var near = _near_ref
 	if near != null:
 		look = (near.global_position - tower.global_position).normalized() * 1.1
 	for i in 2:
@@ -51,6 +74,21 @@ func physics(delta: float) -> void:
 			v = v.bounce(o.normalized()) * 0.6
 		_vel[i] = v
 		_off[i] = o
+	# idle breeze sway, plus a little hop of excitement when rats come close
+	_near = near != null
+	if not _near:
+		_wob_v += sin(_t * 1.3) * 0.8 * delta * 10.0
+	_hop_cd -= delta
+	if _near and _hop_cd <= 0.0 and _hop <= 0.0:
+		_hop_cd = randf_range(0.8, 1.6) if not tower.is_overdrive() else 0.35
+		_hop_v = 55.0
+	if _hop > 0.0 or _hop_v > 0.0:
+		_hop_v -= 420.0 * delta
+		_hop += _hop_v * delta
+		if _hop <= 0.0:
+			_hop = 0.0
+			_hop_v = 0.0
+			_wob_v += randf_range(-3.0, 3.0)
 	# body wobble spring
 	_wob_v += -_wob * 140.0 * delta
 	_wob_v *= maxf(0.0, 1.0 - 6.0 * delta)
@@ -80,9 +118,9 @@ func on_destroyed() -> void:
 	var pos := tower.global_position
 	# the cutout falls flat on its back
 	var flat := Sprite2D.new()
-	flat.texture = PixelArt.tex("tower_decoy_%d" % tower.level)
+	flat.texture = PixelArt.tex("tower_decoy_%d_d2" % tower.level)
 	flat.centered = false
-	flat.offset = Vector2(-10, -25)
+	flat.offset = Vector2(-11, -27)
 	flat.position = pos + Vector2(0, 2)
 	arena.hazards.add_child(flat)
 	var tw := flat.create_tween()
@@ -109,15 +147,17 @@ func on_destroyed() -> void:
 
 
 func draw(ci: Node2D) -> void:
+	var lift := -roundf(_hop)
 	# cardboard prop-stand behind the cutout
-	ci.draw_colored_polygon(PackedVector2Array([Vector2(1, 1), Vector2(9, 1), Vector2(3, -12)]), PixelArt.C["T"])
-	ci.draw_line(Vector2(1, 1), Vector2(3, -12), PixelArt.C["B"], 1.0)
-	ci.draw_rect(Rect2(-8, 0, 17, 2), Color(0, 0, 0, 0.25))
-	# the cutout (wobbles around its feet)
-	ci.draw_set_transform(Vector2(0, 1), _wob * 0.08, Vector2.ONE)
-	ci.draw_texture(PixelArt.tex("tower_decoy_%d" % tower.level), Vector2(-10, -25))
+	ci.draw_colored_polygon(PackedVector2Array([Vector2(1, 1), Vector2(10, 1), Vector2(3, -14 + lift)]), PixelArt.C["T"])
+	ci.draw_line(Vector2(1, 1), Vector2(3, -14 + lift), PixelArt.C["B"], 1.0)
+	ci.draw_line(Vector2(10, 1), Vector2(3, -14 + lift), PixelArt.C["b"], 1.0)
+	ci.draw_rect(Rect2(-9, 0, 19, 2), Color(0, 0, 0, 0.25))
+	# the cutout (wobbles around its feet, hops when excited)
+	ci.draw_set_transform(Vector2(0, 1 + lift), _wob * 0.08, Vector2.ONE)
+	ci.draw_texture(PixelArt.tex(_tex_name()), Vector2(-11, -27))
 	for i in 2:
-		var c := (EYE_L if i == 0 else EYE_R) + Vector2(0, -1)
+		var c := EYE_L if i == 0 else EYE_R
 		PixelArt.draw_disk(ci, c, 3.0, PixelArt.C["k"])
 		PixelArt.draw_disk(ci, c, 2.3, Color.WHITE)
 		var o: Vector2 = _off[i]
@@ -130,3 +170,7 @@ func draw(ci: Node2D) -> void:
 		var r := taunt_radius() * (0.3 + 0.7 * pulse) if not tower.is_overdrive() else taunt_radius() * pulse
 		var col := Color(1.0, 0.59, 0.71, 0.35 * (1.0 - pulse))
 		PixelArt.draw_ring(ci, Vector2(0, -6), r, col, maxi(24, int(r * 1.2)))
+	# "!" over its head while rats are close
+	if _near and int(_t * 3.0) % 2 == 0:
+		ci.draw_rect(Rect2(0, -33 + lift, 1, 3), PixelArt.C["p"])
+		ci.draw_rect(Rect2(0, -29 + lift, 1, 1), PixelArt.C["p"])

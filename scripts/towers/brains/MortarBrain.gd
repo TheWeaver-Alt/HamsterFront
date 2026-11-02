@@ -13,12 +13,31 @@ var _cd := 1.0
 var _recoil := 0.0
 var _facing := 1.0
 var _t := 0.0
+var _dust_cd := 2.0
+const MUZZLE := Vector2(7.6, -15.4)   # muzzle mouth, local, facing right
+
+
+func debris_texture() -> Texture2D:
+	return PixelArt.tex("tower_mortar_%d" % tower.level)
+
+
+func _muzzle_local() -> Vector2:
+	return Vector2(MUZZLE.x * _facing, MUZZLE.y)
 
 
 func physics(delta: float) -> void:
 	_t += delta
 	_cd -= delta
-	_recoil = move_toward(_recoil, 0.0, delta * 6.0)
+	_recoil = move_toward(_recoil, 0.0, delta * 2.2)
+	# idle: the odd puff of cedar dust drifts out of the tube
+	_dust_cd -= delta
+	if _dust_cd <= 0.0:
+		_dust_cd = randf_range(2.0, 4.0)
+		var mp := tower.global_position + _muzzle_local()
+		GameManager.arena.fx.particle(mp, Vector2(randf_range(-6, 6), randf_range(-14, -8)), 1.0,
+			PixelArt.C["c"], 1.0, -4.0, 1.5)
+		GameManager.arena.fx.particle(mp + Vector2(1, 0), Vector2(randf_range(-4, 4), randf_range(-10, -6)), 0.8,
+			PixelArt.C["t"], 1.0, -4.0, 1.5)
 	if _cd > 0.0:
 		return
 	var target = _pick_target()
@@ -51,7 +70,7 @@ func _pick_target():
 
 func _fire(target) -> void:
 	var arena = GameManager.arena
-	var from := tower.global_position + Vector2(5.0 * _facing, -16.0)
+	var from := tower.global_position + _muzzle_local()
 	var tpos: Vector2 = target.global_position
 	var dist := from.distance_to(tpos)
 	var flight := 0.8 + dist / 500.0
@@ -59,7 +78,7 @@ func _fire(target) -> void:
 	var lead: Vector2 = target.velocity * flight * 0.85
 	var aim := tpos + lead.limit_length(60.0)
 	_facing = -1.0 if aim.x < tower.global_position.x else 1.0
-	from = tower.global_position + Vector2(5.0 * _facing, -16.0)
+	from = tower.global_position + _muzzle_local()
 	var shots := [aim]
 	if tower.is_overdrive():
 		shots.append(aim + Vector2(randf_range(-26, -14), randf_range(-12, 12)))
@@ -104,16 +123,28 @@ func _land(pos: Vector2, radius: float, dmg: float, stun: float, owner_ref) -> v
 
 func draw(ci: Node2D) -> void:
 	var tex := PixelArt.tex("tower_mortar_%d" % tower.level)
-	var kick := Vector2(-2.0 * _facing, 2.0) * _recoil
-	ci.draw_set_transform(Vector2(0, -2) + kick.round(), 0.0, Vector2(_facing, 1))
-	ci.draw_texture(tex, Vector2(-10, -17))
+	# compress-and-kick: squash down + back on firing, overshoot, settle (pivot on the turntable)
+	var p := 1.0 - _recoil
+	var env := exp(-p * 5.0) * (1.0 if _recoil > 0.0 else 0.0)
+	var sy := 1.0 - 0.2 * env * cos(p * 11.0)
+	var sx := 1.0 + 0.1 * env * cos(p * 11.0)
+	var kick := Vector2(-2.5 * _facing, 1.0) * env
+	ci.draw_set_transform(Vector2(0, 1.0 - sy * 1.0) + kick.round(), 0.0, Vector2(_facing * sx, sy))
+	ci.draw_texture(tex, Vector2(-11, -20))
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	# reload indicator: a shaving canister rising into the tube
-	var ready := clampf(1.0 - _cd * BASE_RATE * tower.fire_rate_mult(), 0.0, 1.0)
-	if ready < 1.0:
-		ci.draw_rect(Rect2(-8 * _facing - 1, -4 - roundf(ready * 4.0), 3, 2), PixelArt.C["T"])
+	# reload: a fresh canister rises out of the sack towards the breech
+	var rate := BASE_RATE * tower.fire_rate_mult()
+	var ready := clampf(1.0 - _cd * rate, 0.0, 1.0)
+	if ready < 1.0 and ready > 0.15:
+		var cp := Vector2(-6.0 * _facing, -10.0 - roundf(ready * 4.0))
+		ci.draw_rect(Rect2(cp + Vector2(-1, 0), Vector2(3, 3)), PixelArt.C["T"])
+		ci.draw_rect(Rect2(cp + Vector2(-1, 0), Vector2(3, 1)), PixelArt.C["c"])
+	elif ready >= 1.0 and int(_t * 2.0) % 2 == 0:
+		# loaded: a wisp of shaving pokes out of the muzzle
+		var mp := _muzzle_local() + Vector2(0, -2)
+		ci.draw_rect(Rect2(mp.round(), Vector2(1, 1)), PixelArt.C["y"])
 	if tower.is_overdrive():
 		# candy-striped sparks pop out of the muzzle
-		var mp := Vector2(5.0 * _facing, -18.0)
-		var c := Color.from_hsv(fmod(_t * 2.0, 1.0), 0.7, 1.0)
-		ci.draw_rect(Rect2((mp + Vector2(sin(_t * 9.0) * 3.0, -2.0 - fmod(_t * 12.0, 5.0))).round(), Vector2(1, 1)), c)
+		var mp2 := _muzzle_local()
+		var c := Color.from_hsv(fmod(_t * 2.0, 1.0), 0.6, 1.0)
+		ci.draw_rect(Rect2((mp2 + Vector2(sin(_t * 9.0) * 3.0, -2.0 - fmod(_t * 12.0, 5.0))).round(), Vector2(1, 1)), c)

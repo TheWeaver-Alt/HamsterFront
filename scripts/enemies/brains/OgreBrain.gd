@@ -28,6 +28,8 @@ var _seek_t := 0.0
 var _bark_t := 6.0
 var _step_t := 0.0
 var _scale := 1.0
+var _hurt_t := 0.0
+var _last_action := ""
 
 
 func setup(r: RatEnemy) -> void:
@@ -40,6 +42,7 @@ func get_bark_offset() -> float:
 
 
 func physics(delta: float) -> void:
+	_hurt_t = maxf(0.0, _hurt_t - delta)
 	slam_cd -= delta
 	throw_cd -= delta
 	_bark_t -= delta
@@ -162,7 +165,13 @@ func _find_throw_target():
 	return best
 
 
+func on_damaged(amount: float, _info: Dictionary) -> void:
+	if amount >= 20.0:
+		_hurt_t = 0.22
+
+
 func _start_slam(goal: Vector2, d: float) -> void:
+	_last_action = "slam"
 	state = "slam"
 	state_t = SLAM_WINDUP
 	var to := (goal - rat.global_position).normalized()
@@ -174,6 +183,7 @@ func _start_slam(goal: Vector2, d: float) -> void:
 
 
 func _start_throw(t) -> void:
+	_last_action = "throw"
 	state = "throw"
 	state_t = THROW_WINDUP
 	throw_at = t.global_position
@@ -277,24 +287,32 @@ func draw(ci: RatEnemy) -> void:
 		PixelArt.draw_disk(ci, c, SLAM_R, Color(1.0, 0.25, 0.2, 0.12 + 0.12 * prog))
 		PixelArt.draw_ring(ci, c, SLAM_R, Color(1.0, 0.3, 0.2, 0.55 + 0.45 * blink))
 		PixelArt.draw_ring(ci, c, SLAM_R * (1.0 - prog * 0.8) + 2.0, Color(1.0, 0.85, 0.5, 0.6))
-	var sprite := "rat_ogre_%d" % ci.anim_frame()
+	var sprite := "rat_ogre_walk_%d" % ci.walk_frame()
+	if not ci.moving():
+		sprite = "rat_ogre_walk_%d" % (int(ci.anim_t * 1.6) % 2)   # heavy breathing
 	var shake := Vector2.ZERO
-	if state == "slam" or state == "throw":
-		sprite = "rat_ogre_slam"
-		shake = Vector2(randi_range(-1, 1), 0)
-	elif state == "recover":
-		shake = Vector2(0, 1)
+	match state:
+		"slam":
+			sprite = "rat_ogre_windup_0"
+			shake = Vector2(randi_range(-1, 1), 0)
+		"throw":
+			sprite = "rat_ogre_throw_0"
+			shake = Vector2(randi_range(-1, 1), 0)
+		"recover":
+			if _last_action == "slam" and state_t > 0.2:
+				sprite = "rat_ogre_smash_0"
+			else:
+				sprite = "rat_ogre_walk_0"
+				shake = Vector2(0, 1)
+		_:
+			if _hurt_t > 0.0:
+				sprite = "rat_ogre_hurt_0"
 	ci.draw_sprite(sprite, Vector2(0, 3) + shake)
 	if state == "throw":
-		var ball := PixelArt.tex("rat_squeaker_ball")
-		var hand := Vector2(-ci.facing * 4.0, -38.0)
+		var ball := PixelArt.tex("rat_squeaker_ball_%d" % (int(ci.anim_t * 8.0) % 2))
+		var hand := Vector2(-12.0 * ci.facing, -31.0) + ci.vis_off
 		ci.draw_texture(ball, (hand - ball.get_size() / 2.0).round())
 
 
-func draw_spawning(ci: RatEnemy) -> void:
-	# a huge stitched head and a pair of glowing eyes heave out of the burrow
-	ci.draw_rect(Rect2(-8, -6, 16, 6), PixelArt.C["m"])
-	ci.draw_rect(Rect2(-8, -6, 16, 1), PixelArt.C["k"])
-	ci.draw_rect(Rect2(-4, -4, 1, 1), PixelArt.C["z"])
-	ci.draw_rect(Rect2(3, -4, 1, 1), PixelArt.C["z"])
-	ci.draw_rect(Rect2(-1, -2, 3, 1), PixelArt.C["w"])
+func spawn_sprite(_ci: RatEnemy) -> String:
+	return "rat_ogre_walk_0"

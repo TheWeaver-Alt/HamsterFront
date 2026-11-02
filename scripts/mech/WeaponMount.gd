@@ -42,7 +42,7 @@ func tick(delta: float, aim_dir: Vector2, fire_held: bool, alt_pressed: bool, ca
 
 
 func muzzle_pos(side: float = 0.0) -> Vector2:
-	return global_position + aim * 15.0 + aim.orthogonal() * side
+	return global_position + aim * 15.0 + aim.orthogonal() * side + (aim.orthogonal() * (4.0 if aim.x >= 0.0 else -4.0) if mech.chassis == "brawler" else Vector2.ZERO)
 
 
 func _arena():
@@ -65,7 +65,8 @@ func _fire_shotgun() -> void:
 		var v := Vector2.from_angle(a) * randf_range(250.0, 330.0)
 		arena.shots.fire(mp, v, dmg, {"kind": "pellet", "life": randf_range(0.24, 0.34), "radius": 2.5,
 			"knockback": 45.0, "pierce": pierce, "owner": mech})
-	arena.fx.flash(mp, aim.angle(), 9.0, Color8(255, 240, 120), 0.07)
+	arena.fx.flash(mp, aim.angle(), 13.0, Color8(255, 240, 120), 0.07)
+	arena.fx.flash(mp + aim * 6.0, aim.angle(), 6.0, Color8(255, 150, 70), 0.05)
 	arena.fx.sawdust(mp, aim, 12)
 	recoil = 4.0
 	mech.knock -= aim * 55.0
@@ -128,7 +129,7 @@ func _fire_rails() -> void:
 		var v := Vector2.from_angle(aim.angle() + spread + randf_range(-0.03, 0.03)) * 540.0
 		arena.shots.fire(mp, v, dmg, {"kind": "toothpick", "life": 0.6, "radius": 2.0,
 			"knockback": 18.0, "pierce": pierce, "owner": mech})
-	arena.fx.flash(mp, aim.angle(), 5.0, Color8(150, 220, 255), 0.05)
+	arena.fx.flash(mp, aim.angle(), 7.0, Color8(150, 220, 255), 0.05)
 	arena.fx.sparks(mp, Color8(90, 200, 230), 2, aim)
 	recoil = 2.0
 	JuiceManager.add_trauma(0.035)
@@ -149,14 +150,15 @@ func _draw() -> void:
 	if mech == null or mech.downed:
 		return
 	if mech.chassis == "brawler":
+		# shotgun on the upper hardpoint, tube-fist on the lower one (keeps the pilot visible)
 		var gun := PixelArt.tex("brawler_gun")
-		draw_texture(gun, Vector2(-3.0 - recoil, -1.0).round())
+		draw_texture(gun, Vector2(-1.0 - recoil, -8.0).round())
 		var fist := PixelArt.tex("brawler_fist")
 		var ext := 0.0
 		if punch_t > 0.0:
 			var t := 1.0 - punch_t / PUNCH_TIME
 			ext = sin(t * PI) * 14.0 * mech.stats.g("alt_size_mult")
-		draw_texture(fist, Vector2(-4.0 + ext, -11.0).round())
+		draw_texture(fist, Vector2(-6.0 + ext, 0.0).round())
 	else:
 		var rails := PixelArt.tex("wheeler_rails")
 		draw_texture(rails, Vector2(-4.0 - recoil, -5.0).round())

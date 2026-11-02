@@ -479,6 +479,9 @@ func _start_wave() -> void:
 
 func _wave_cleared() -> void:
 	Sfx.play("wave_clear")
+	var bonus := 20 + GameManager.wave * 6
+	GameManager.add_seeds(bonus)
+	fx.float_text(ArenaMap.SILO_CENTER + Vector2(0, -48), "+%d WAVE BONUS" % bonus, PixelArt.C["y"], 1.6, 18.0)
 	GameManager.say("WAVE %d CLEARED!" % GameManager.wave, "THE VENDING MACHINE APPROACHES", Color8(255, 214, 64))
 	var repair := GameManager.gstats.g("tower_wave_repair", 0.0)
 	for t in towers:

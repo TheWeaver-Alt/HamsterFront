@@ -26,6 +26,8 @@ var hazards: Array = []
 var arena
 var top: Node2D
 var _tick_t := 0.0
+var _shell_grid: Dictionary = {}     # Vector2i(16px cell) -> Array[Hazard] (shell piles only)
+var _shell_dirty := true
 
 
 func _ready() -> void:
@@ -45,6 +47,8 @@ func add(kind: String, pos: Vector2, radius: float, life: float, dps: float = 0.
 				hazards.remove_at(i)
 				break
 	var h := Hazard.new()
+	if kind == "shells":
+		_shell_dirty = true
 	h.kind = kind
 	h.pos = pos
 	h.radius = radius
@@ -76,12 +80,31 @@ func add_shells(pos: Vector2, n: int = 1) -> void:
 
 ## Movement multiplier (<=1) for a rat standing at pos.
 func slow_factor(pos: Vector2) -> float:
+	if _shell_dirty:
+		_rebuild_shell_grid()
+	var bucket = _shell_grid.get(Vector2i(floori(pos.x / 16.0), floori(pos.y / 16.0)))
+	if bucket == null:
+		return 1.0
 	var slow := 0.0
-	var mult := GameManager.gstats.g("shell_slow_mult", 1.0)
+	for h in bucket:
+		if absf(h.pos.x - pos.x) < h.radius and absf(h.pos.y - pos.y) < h.radius:
+			slow += 0.08 * h.count
+	return 1.0 - minf(slow * GameManager.gstats.g("shell_slow_mult", 1.0), 0.6)
+
+
+func _rebuild_shell_grid() -> void:
+	_shell_dirty = false
+	_shell_grid.clear()
 	for h in hazards:
-		if h.kind == "shells" and absf(h.pos.x - pos.x) < h.radius and absf(h.pos.y - pos.y) < h.radius:
-			slow += 0.08 * h.count * mult
-	return 1.0 - minf(slow, 0.6)
+		if h.kind != "shells":
+			continue
+		# a pile (radius 9) can touch up to 4 cells
+		for c in [h.pos + Vector2(-9, -9), h.pos + Vector2(9, -9), h.pos + Vector2(-9, 9), h.pos + Vector2(9, 9)]:
+			var key := Vector2i(floori(c.x / 16.0), floori(c.y / 16.0))
+			if not _shell_grid.has(key):
+				_shell_grid[key] = [h]
+			elif not _shell_grid[key].has(h):
+				_shell_grid[key].append(h)
 
 
 func _physics_process(delta: float) -> void:
@@ -90,6 +113,8 @@ func _physics_process(delta: float) -> void:
 		var h: Hazard = hazards[k]
 		h.life -= delta
 		if h.life <= 0.0:
+			if h.kind == "shells":
+				_shell_dirty = true
 			hazards.remove_at(k)
 		k -= 1
 	_tick_t += delta

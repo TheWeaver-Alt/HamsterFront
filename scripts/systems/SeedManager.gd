@@ -14,7 +14,7 @@ class Seed:
 	var vz: float = 0.0
 	var life: float = LIFETIME
 	var horizontal: bool = false
-	var magnet: Node2D = null
+	var magnet = null
 
 var seeds: Array = []
 var arena
@@ -65,6 +65,7 @@ func _physics_process(delta: float) -> void:
 			if d < r and d < best:
 				best = d
 				target = p
+		s.magnet = target
 		if target != null:
 			var to: Vector2 = target.global_position + Vector2(0, -6) - s.pos
 			var pull := 140.0 + (1.0 - clampf(best / 60.0, 0.0, 1.0)) * 220.0
@@ -105,4 +106,8 @@ func _draw() -> void:
 		if sd.z > 0.5:
 			draw_rect(Rect2(p.x - 1, p.y + 1, 3, 1), shadow)
 		var t := th if sd.horizontal else tv
+		if sd.magnet != null and sd.vel.length() > 60.0:
+			# vacuum streak
+			var back := -sd.vel.normalized()
+			draw_line(p + back, p + back * 5.0, Color(1, 1, 1, 0.35), 1.0)
 		draw_texture(t, p - Vector2(t.get_width() / 2, t.get_height() / 2 + roundf(sd.z)))

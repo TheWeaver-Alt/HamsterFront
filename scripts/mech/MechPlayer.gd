@@ -61,6 +61,8 @@ var dash_dir := Vector2.ZERO
 var ready_pressed := false
 var context := ""              # current interaction prompt text
 var context_ok := true
+var preview_pad := Vector2i(-1, -1)   # pad the build ghost is shown on
+var preview_tower = null              # tower whose range is previewed
 
 var _dump_acc := 0.0
 var _dumped := 0
@@ -92,7 +94,7 @@ func _ready() -> void:
 	wheel.mech = self
 	wheel.vented.connect(_on_vented)
 	wheel.spun_out.connect(_on_spun_out)
-	weapon.position = Vector2(0, -14) if chassis == "brawler" else Vector2(0, -25)
+	weapon.position = Vector2(0, -9) if chassis == "brawler" else Vector2(0, -25)
 	collision_layer = GameManager.L_PLAYERS
 	collision_mask = GameManager.L_WORLD | GameManager.L_TOWERS
 	overlay.draw.connect(_draw_overlay)
@@ -231,6 +233,8 @@ func _process_actions(delta: float) -> void:
 	var pad: Vector2i = arena.free_pad_near(global_position, 14.0)
 	context = ""
 	context_ok = true
+	preview_pad = Vector2i(-1, -1)
+	preview_tower = null
 	if dumping:
 		if not near_silo or pouch.amount <= 0:
 			_finish_dump()
@@ -251,22 +255,24 @@ func _process_actions(delta: float) -> void:
 			_dump_acc = 0.0
 	elif tower != null:
 		if pouch.amount >= 10:
-			context = "[%s] CRAM SEEDS: SUGAR RUSH!" % input.glyph("interact")
+			context = "[%s] CRAM: SUGAR RUSH!" % input.glyph("interact")
 			if input.just("interact"):
 				_cram(tower)
 		elif tower.level < GameManager.MAX_TOWER_LEVEL:
 			var c: int = GameManager.tower_cost(tower.kind, tower.level + 1)
-			context = "[%s] UPGRADE LV%d  %d" % [input.glyph("build"), tower.level + 1, c]
+			context = "[%s] UPGRADE %d" % [input.glyph("build"), c]
 			context_ok = GameManager.can_afford(c)
 		else:
 			context = "%s  MAX LV" % GameManager.TOWER_INFO[tower.kind]["short"]
+		preview_tower = tower
 		if input.just("build"):
 			arena.try_upgrade(self, tower)
 	elif pad != Vector2i(-1, -1):
 		var kind: String = GameManager.TOWER_TYPES[selected_tower]
 		var c := GameManager.tower_cost(kind)
-		context = "[%s] BUILD %s %d  [%s]>" % [input.glyph("build"), GameManager.TOWER_INFO[kind]["short"], c, input.glyph("cycle")]
+		context = "[%s] BUILD %s %d" % [input.glyph("build"), GameManager.TOWER_INFO[kind]["short"], c]
 		context_ok = GameManager.can_afford(c)
+		preview_pad = pad
 		if input.just("build"):
 			arena.try_build(self, pad, kind)
 	elif pouch.is_full():
@@ -495,12 +501,25 @@ func _draw_overlay() -> void:
 		if revive_progress > 0.0:
 			PixelArt.draw_bar(overlay, Rect2(-10, top + 8, 20, 2), revive_progress, PixelArt.C["Z"])
 		return
+	# build ghost + range preview
+	if preview_pad != Vector2i(-1, -1):
+		var kind: String = GameManager.TOWER_TYPES[selected_tower]
+		var at := ArenaMap.cell_center(preview_pad) - global_position
+		var a := 0.35 + 0.15 * sin(Time.get_ticks_msec() * 0.008)
+		overlay.draw_texture(PixelArt.tex("tower_base"), at + Vector2(-10, -6), Color(1, 1, 1, a))
+		var r: float = GameManager.TOWER_INFO[kind]["range"] * GameManager.gstats.g("tower_range_mult", 1.0)
+		PixelArt.draw_ring(overlay, at, r, Color(col, 0.55), int(r * 1.2))
+	elif preview_tower != null and is_instance_valid(preview_tower):
+		var at2: Vector2 = preview_tower.global_position - global_position
+		PixelArt.draw_ring(overlay, at2, preview_tower.range_radius(), Color(1, 1, 1, 0.3), int(preview_tower.range_radius() * 1.2))
 	# player tag
 	PixelArt.draw_text_centered(overlay, Vector2(0, top + 2), tag, col)
-	# context prompt
+	# context prompt on a dark plate
 	if context != "":
 		var c := Color8(255, 248, 231) if context_ok else Color8(160, 152, 140)
-		PixelArt.draw_text_centered(overlay, Vector2(0, top - 8), context, c)
+		var tw := PixelArt.text_width(context)
+		overlay.draw_rect(Rect2(-tw / 2 - 2, top - 9, tw + 3, 8), Color(0.1, 0.06, 0.12, 0.75))
+		PixelArt.draw_text(overlay, Vector2(-tw / 2, top - 8), context, c)
 	if wheel.is_redline() and int(Time.get_ticks_msec() / 150) % 2 == 0:
 		PixelArt.draw_text_centered(overlay, Vector2(10, top + 2), "!!", Color8(255, 64, 40))
 	# mouse reticle for the keyboard+mouse pilot

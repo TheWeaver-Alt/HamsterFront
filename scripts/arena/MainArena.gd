@@ -67,6 +67,7 @@ func _ready() -> void:
 	_build_props()
 	_spawn_players()
 	_build_quiz_layer()
+	_build_ambient()
 	tether.draw.connect(_draw_tether)
 	burrow_fx.draw.connect(_draw_burrows)
 	GameManager.game_over_triggered.connect(_on_game_over)
@@ -217,6 +218,24 @@ func _build_props() -> void:
 	silo_node.set_script(load("res://scripts/arena/Silo.gd"))
 	silo_node.position = ArenaMap.SILO_CENTER + Vector2(0, 22)
 	world.add_child(silo_node)
+
+
+## Ambient life (swaying grass, critters, cloud shadows, lighting) from scripts/systems/AmbientLayer.gd.
+## The node is added under the arena; it may create its own children at any z_index and
+## receives setup(arena) before entering the tree.
+var ambient = null
+
+
+func _build_ambient() -> void:
+	var path := "res://scripts/systems/AmbientLayer.gd"
+	if not ResourceLoader.exists(path):
+		return
+	ambient = Node2D.new()
+	ambient.name = "Ambient"
+	ambient.set_script(load(path))
+	if ambient.has_method("setup"):
+		ambient.setup(self)
+	add_child(ambient)
 
 
 func _build_quiz_layer() -> void:

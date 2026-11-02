@@ -20,6 +20,7 @@ Sfx="*res://autoloads/Sfx.gd"
 GameManager="*res://autoloads/GameManager.gd"
 CardDB="*res://autoloads/CardDB.gd"
 JuiceManager="*res://autoloads/JuiceManager.gd"
+Transition="*res://autoloads/Transition.gd"
 
 [display]
 

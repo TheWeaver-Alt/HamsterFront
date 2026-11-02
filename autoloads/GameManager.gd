@@ -18,6 +18,7 @@ const L_RAT_BLOCK := 2
 const L_PLAYERS := 4
 const L_ENEMIES := 8
 const L_TOWERS := 16
+const L_CLIFF := 32        # cliff edges/faces: block walkers; jetpacking mechs ignore them
 
 const TOWER_TYPES := ["gatling", "laser", "mortar", "tesla", "decoy"]
 const TOWER_INFO := {
@@ -38,6 +39,12 @@ const MAX_TOWER_LEVEL := 3
 var num_players: int = 1
 var player_devices: Array = ["kbm", "pad0"]
 var p1_chassis: String = "brawler"
+## Learning Mode level per player slot: 0 off, 1 counting (age 4-6), 2 add/sub to 10 (age 6),
+## 3 add/sub to 20 (age 7-8). Gates card activation + tower upgrades behind a MathQuiz.
+var learning_levels: Array = [0, 0]
+## "kid" (tougher Silo, slower/weaker rats, more seeds) or "normal".
+var difficulty: String = "normal"
+const LEARNING_NAMES := ["OFF", "COUNTING", "MATHS TO 10", "MATHS TO 20"]
 
 # --- run state
 var wave: int = 0
@@ -51,6 +58,8 @@ var seeds_banked_total: int = 0
 var run_time: float = 0.0
 var gstats: StatBlock
 var owned_cards: Dictionary = {}     # card id -> times taken (any player)
+var math_stars: int = 0              # Learning Mode: correct answers this run
+var math_asked: int = 0
 
 # --- live references (set by MainArena)
 var arena = null   # MainArena (untyped: accessed dynamically)
@@ -74,9 +83,11 @@ func _make_gstats() -> StatBlock:
 
 func new_run() -> void:
 	wave = 0
-	silo_max_hp = 1500.0
+	silo_max_hp = 2200.0 if difficulty == "kid" else 1500.0
 	silo_hp = silo_max_hp
-	seeds = 90
+	seeds = 130 if difficulty == "kid" else 90
+	math_stars = 0
+	math_asked = 0
 	kills = 0
 	seeds_banked_total = 0
 	run_time = 0.0
@@ -101,6 +112,23 @@ func set_phase(p: String) -> void:
 
 func is_coop() -> bool:
 	return num_players >= 2
+
+
+## Learning Mode level (0 = off) for a MechPlayer.
+func learning_level(player) -> int:
+	if player == null or not is_instance_valid(player):
+		return 0
+	var i: int = player.player_id - 1
+	return int(learning_levels[i]) if i >= 0 and i < learning_levels.size() else 0
+
+
+## Enemy multipliers for the chosen difficulty.
+func enemy_hp_mult() -> float:
+	return 0.7 if difficulty == "kid" else 1.0
+
+
+func enemy_speed_mult() -> float:
+	return 0.8 if difficulty == "kid" else 1.0
 
 
 # ------------------------------------------------------------------ economy

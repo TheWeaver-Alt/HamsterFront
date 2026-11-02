@@ -49,38 +49,48 @@ func build_roster(n: int) -> Array:
 	var spd_mult := 1.0 + 0.015 * (n - 1)
 	var burrow_count := open_burrows(n)
 	var out: Array = []
-	var time := 1.0
 	var packs := 1 + int(n * 0.7)
 	var pack_size := mini(20, 8 + n * 2)
 	var gap := maxf(3.5, 9.0 - n * 0.35)
+	# Unit ramp (waves 1..10):
+	#   jezzail  -  1  1  2  2  3  3  4  4  5      snipers walk with the swarm
+	#   monk     -  -  1  1  2  2  3  3  4  4      gas priests walk with the swarm
+	#   roomba   -  -  -  1  1  1  2  2  2  3      own groups, launched mid-wave
+	#   ogre     every 5th wave (n/5 of them), with a slightly lighter swarm
+	var jezzails := 0 if n < 2 else 1 + int((n - 2) / 2)
+	var monks := 0 if n < 3 else 1 + int((n - 3) / 2)
+	var roombas := 0 if n < 4 else 1 + int((n - 4) / 3)
+	var ogres := int(n / 5) if n % 5 == 0 else 0
+	if ogres > 0:
+		packs = maxi(1, packs - 1)
 	var specials: Array = []
-	if n >= 2:
-		for i in int(n / 2):
-			specials.append("jezzail")
-	if n >= 3:
-		for i in int((n - 1) / 2):
-			specials.append("monk")
-	if n >= 4 and n % 2 == 0:
-		for i in 1 + int((n - 4) / 4):
-			specials.append("roomba")
+	for i in jezzails:
+		specials.append("jezzail")
+	for i in monks:
+		specials.append("monk")
 	specials.shuffle()
+	var time := 1.0
 	for p in packs:
 		var units: Array = []
 		for i in pack_size:
 			units.append("squeaker")
-		# sprinkle specials into the packs
+		# sprinkle specials evenly through the packs (never in the very first rank)
 		var per := int(ceil(float(specials.size()) / float(packs - p))) if specials.size() > 0 else 0
 		for i in per:
 			if specials.is_empty():
 				break
-			units.insert(randi_range(0, units.size()), specials.pop_back())
+			units.insert(randi_range(2, units.size()), specials.pop_back())
 		out.append(_group(time, randi() % burrow_count, units, hp_mult, spd_mult))
 		time += gap
-	if n % 5 == 0:
-		var ogres: Array = []
-		for i in int(n / 5):
-			ogres.append("ogre")
-		out.append(_group(time * 0.6, randi() % burrow_count, ogres, hp_mult * 0.85, 1.0))
+	var span := gap * packs
+	for i in roombas:
+		var rt := 1.0 + span * float(i + 1) / float(roombas + 1) + 0.5
+		out.append(_group(rt, randi() % burrow_count, ["roomba"], hp_mult, spd_mult))
+	if ogres > 0:
+		var ogre_units: Array = []
+		for i in ogres:
+			ogre_units.append("ogre")
+		out.append(_group(1.0 + span * 0.4, randi() % burrow_count, ogre_units, hp_mult * 0.85, 1.0))
 	return out
 
 
@@ -110,7 +120,7 @@ func _physics_process(delta: float) -> void:
 				g["next"] -= delta
 				if g["next"] <= 0.0:
 					var kind: String = g["units"].pop_front()
-					g["next"] = 0.09 if kind == "squeaker" else 0.4
+					g["next"] = 0.09 if kind == "squeaker" else (1.6 if kind == "ogre" else 0.4)
 					_spawn(kind, g)
 					if g["units"].is_empty():
 						groups.remove_at(k)

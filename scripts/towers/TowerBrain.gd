@@ -43,3 +43,8 @@ func on_overdrive() -> void:
 
 func on_destroyed() -> void:
 	pass
+
+
+## Called after the tower takes damage (amount already scaled).
+func on_damaged(_amount: float) -> void:
+	pass

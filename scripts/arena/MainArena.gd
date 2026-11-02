@@ -10,9 +10,7 @@ const TowerScene := preload("res://scenes/TowerBase.tscn")
 const HASH := 32
 const FIRST_BUILD_TIME := 25.0
 const BUILD_TIME := 15.0
-const TILE_ORDER := ["tile_grass_0", "tile_grass_1", "tile_grass_2", "tile_grass_3",
-	"tile_flowers_0", "tile_flowers_1", "tile_flowers_2", "tile_path_0", "tile_path_1", "tile_path_2",
-	"tile_pad", "tile_burrow", "tile_fence", "tile_dirt"]
+const TerrainArt := preload("res://scripts/art/TerrainArt.gd")
 
 @onready var ground: TileMapLayer = $Ground
 @onready var hazards: HazardManager = $Hazards
@@ -39,6 +37,7 @@ var silo_node = null   # Silo.gd (StaticBody2D)
 var build_timer := 0.0
 var boss = null
 var hallucination: CanvasLayer = null
+var math_quiz = null      # Learning Mode quiz (scripts/ui/MathQuiz.gd), drawn above the card draft
 
 var _grid: Dictionary = {}
 var _burrow_warn: Dictionary = {}     # Vector2i -> seconds left
@@ -67,6 +66,7 @@ func _ready() -> void:
 	_build_colliders()
 	_build_props()
 	_spawn_players()
+	_build_quiz_layer()
 	tether.draw.connect(_draw_tether)
 	burrow_fx.draw.connect(_draw_burrows)
 	GameManager.game_over_triggered.connect(_on_game_over)
@@ -96,39 +96,37 @@ func _has_kbm_player() -> bool:
 # ------------------------------------------------------------------ construction
 
 func _build_tiles() -> void:
-	var atlas := Image.create(16 * TILE_ORDER.size(), 16, false, Image.FORMAT_RGBA8)
-	for i in TILE_ORDER.size():
-		var img: Image = PixelArt.tex(TILE_ORDER[i]).get_image()
-		atlas.blit_rect(img, Rect2i(0, 0, 16, 16), Vector2i(i * 16, 0))
+	# Compose every cell's 3/4-view tile from its neighbours, dedupe into one atlas.
+	var keys: Array = []
+	var key_index: Dictionary = {}
+	var cell_keys: Array = []
+	for y in ArenaMap.H:
+		for x in ArenaMap.W:
+			var k: String = TerrainArt.cell_key(map, x, y)
+			if not key_index.has(k):
+				key_index[k] = keys.size()
+				keys.append([k, x, y])
+			cell_keys.append(key_index[k])
+	var cols := 32
+	var rows := int(ceil(float(keys.size()) / cols))
+	var atlas := Image.create(16 * cols, 16 * rows, false, Image.FORMAT_RGBA8)
+	for i in keys.size():
+		var img: Image = TerrainArt.cell_image(map, keys[i][1], keys[i][2], keys[i][0])
+		atlas.blit_rect(img, Rect2i(0, 0, 16, 16), Vector2i((i % cols) * 16, int(i / cols) * 16))
 	var tex := ImageTexture.create_from_image(atlas)
 	var ts := TileSet.new()
 	ts.tile_size = Vector2i(16, 16)
 	var src := TileSetAtlasSource.new()
 	src.texture = tex
 	src.texture_region_size = Vector2i(16, 16)
-	for i in TILE_ORDER.size():
-		src.create_tile(Vector2i(i, 0))
+	for i in keys.size():
+		src.create_tile(Vector2i(i % cols, int(i / cols)))
 	ts.add_source(src, 0)
 	ground.tile_set = ts
 	for y in ArenaMap.H:
 		for x in ArenaMap.W:
-			var i := map.idx(x, y)
-			var tile := 0
-			var d: int = map.deco[i]
-			match map.cells[i]:
-				ArenaMap.Cell.WALL:
-					tile = 12
-				ArenaMap.Cell.PATH:
-					tile = 7 + d % 3
-				ArenaMap.Cell.PAD:
-					tile = 10
-				ArenaMap.Cell.BURROW:
-					tile = 11
-				ArenaMap.Cell.SILO:
-					tile = 13
-				_:
-					tile = (4 + (d - 10)) if d >= 10 else d
-			ground.set_cell(Vector2i(x, y), 0, Vector2i(tile, 0))
+			var ti: int = cell_keys[y * ArenaMap.W + x]
+			ground.set_cell(Vector2i(x, y), 0, Vector2i(ti % cols, int(ti / cols)))
 
 
 func _build_colliders() -> void:
@@ -140,12 +138,7 @@ func _build_colliders() -> void:
 	var W := ArenaMap.W * 16.0
 	var H := ArenaMap.H * 16.0
 	for r in [Rect2(0, 0, W, 16), Rect2(0, H - 16, W, 16), Rect2(0, 0, 16, H), Rect2(W - 16, 0, 16, H)]:
-		var cs := CollisionShape2D.new()
-		var sh := RectangleShape2D.new()
-		sh.size = r.size
-		cs.shape = sh
-		cs.position = r.position + r.size / 2.0
-		walls.add_child(cs)
+		_add_rect(walls, r)
 	add_child(walls)
 	# pads block rats only
 	var pads := StaticBody2D.new()
@@ -153,13 +146,51 @@ func _build_colliders() -> void:
 	pads.collision_layer = GameManager.L_RAT_BLOCK
 	pads.collision_mask = 0
 	for p in ArenaMap.PADS:
-		var cs := CollisionShape2D.new()
-		var sh := RectangleShape2D.new()
-		sh.size = Vector2(14, 14)
-		cs.shape = sh
-		cs.position = ArenaMap.cell_center(p)
-		pads.add_child(cs)
+		_add_rect(pads, Rect2(ArenaMap.cell_center(p) - Vector2(7, 7), Vector2(14, 14)))
 	add_child(pads)
+	# cliffs: faces are solid, and plateau edges (without a ramp) are thin walls
+	var cliffs := StaticBody2D.new()
+	cliffs.name = "Cliffs"
+	cliffs.collision_layer = GameManager.L_RAT_BLOCK | GameManager.L_CLIFF
+	cliffs.collision_mask = 0
+	for y in ArenaMap.H:
+		var run_start := -1
+		for x in ArenaMap.W + 1:
+			var face := x < ArenaMap.W and map.cell_type(Vector2i(x, y)) == ArenaMap.Cell.FACE
+			if face and run_start < 0:
+				run_start = x
+			elif not face and run_start >= 0:
+				_add_rect(cliffs, Rect2(run_start * 16, y * 16, (x - run_start) * 16, 16))
+				run_start = -1
+	for y in ArenaMap.H:
+		for x in ArenaMap.W:
+			var c := Vector2i(x, y)
+			if map.cell_elev(c) != 1 or map.cell_type(c) == ArenaMap.Cell.FACE or map.cell_type(c) == ArenaMap.Cell.WALL:
+				continue
+			# west / east / north / south drops to low ground
+			if _is_drop(Vector2i(x - 1, y)):
+				_add_rect(cliffs, Rect2(x * 16 - 2, y * 16, 4, 16))
+			if _is_drop(Vector2i(x + 1, y)):
+				_add_rect(cliffs, Rect2(x * 16 + 14, y * 16, 4, 16))
+			if _is_drop(Vector2i(x, y - 1)):
+				_add_rect(cliffs, Rect2(x * 16, y * 16 - 2, 16, 4))
+			if _is_drop(Vector2i(x, y + 1)):
+				_add_rect(cliffs, Rect2(x * 16, y * 16 + 14, 16, 4))
+	add_child(cliffs)
+
+
+func _is_drop(c: Vector2i) -> bool:
+	var t := map.cell_type(c)
+	return map.cell_elev(c) == 0 and t != ArenaMap.Cell.WALL
+
+
+func _add_rect(body: StaticBody2D, r: Rect2) -> void:
+	var cs := CollisionShape2D.new()
+	var sh := RectangleShape2D.new()
+	sh.size = r.size
+	cs.shape = sh
+	cs.position = r.position + r.size / 2.0
+	body.add_child(cs)
 
 
 func _build_props() -> void:
@@ -188,9 +219,26 @@ func _build_props() -> void:
 	world.add_child(silo_node)
 
 
+func _build_quiz_layer() -> void:
+	var path := "res://scripts/ui/MathQuiz.gd"
+	if not ResourceLoader.exists(path):
+		return
+	var layer := CanvasLayer.new()
+	layer.name = "QuizLayer"
+	layer.layer = 25
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(layer)
+	var quiz := Control.new()
+	quiz.name = "MathQuiz"
+	quiz.set_script(load(path))
+	quiz.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(quiz)
+	math_quiz = quiz
+
+
 func _spawn_players() -> void:
 	GameManager.players.clear()
-	var starts := [ArenaMap.SILO_CENTER + Vector2(-26, 40), ArenaMap.SILO_CENTER + Vector2(26, 40)]
+	var starts := [ArenaMap.SILO_CENTER + Vector2(-40, 36), ArenaMap.SILO_CENTER + Vector2(40, 36)]
 	for i in GameManager.num_players:
 		var m = MechScene.instantiate()
 		var chassis := "brawler" if i == 0 else "wheeler"
@@ -224,6 +272,10 @@ func unregister_enemy(e) -> void:
 	enemies.erase(e)
 	if e == boss:
 		boss = null
+		for o in enemies:
+			if is_instance_valid(o) and o.alive and o.is_boss:
+				boss = o
+				break
 
 
 func _rebuild_grid() -> void:
@@ -339,9 +391,28 @@ func try_upgrade(player, t) -> bool:
 		Sfx.play("deny", 1.0, -6.0)
 		return false
 	var cost := GameManager.tower_cost(t.kind, t.level + 1)
-	if not GameManager.spend(cost):
+	if not GameManager.can_afford(cost):
 		Sfx.play("deny")
 		fx.float_text(t.global_position + Vector2(0, -16), "NEED %d SEEDS" % cost, PixelArt.C["r"], 0.9, 8.0)
+		return false
+	# Learning Mode: solve a puzzle to activate the upgrade (time freezes meanwhile)
+	var lvl := GameManager.learning_level(player)
+	if lvl > 0 and math_quiz != null:
+		if math_quiz.active or get_tree().paused:
+			return false
+		get_tree().paused = true
+		var info: Dictionary = GameManager.TOWER_INFO[t.kind]
+		math_quiz.ask(player, lvl, "UPGRADE %s TO LV%d" % [info["short"], t.level + 1])
+		await math_quiz.solved
+		if GameManager.phase != "gameover" and not pause_menu.visible:
+			get_tree().paused = false
+		if is_instance_valid(player):
+			player.input.consume()
+		if not is_instance_valid(t) or not t.alive or t.level >= GameManager.MAX_TOWER_LEVEL:
+			return false
+		cost = GameManager.tower_cost(t.kind, t.level + 1)
+	if not GameManager.spend(cost):
+		Sfx.play("deny")
 		return false
 	t.upgrade()
 	Sfx.play("upgrade")

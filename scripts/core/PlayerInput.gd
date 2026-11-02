@@ -13,14 +13,14 @@ const DEADZONE := 0.22
 
 const KBM_KEYS := {
 	"up": [KEY_W], "down": [KEY_S], "left": [KEY_A], "right": [KEY_D],
-	"alt": [KEY_SPACE], "sprint": [KEY_SHIFT], "interact": [KEY_E], "spit": [KEY_Q],
+	"alt": [KEY_V], "jump": [KEY_SPACE], "sprint": [KEY_SHIFT], "interact": [KEY_E], "spit": [KEY_Q],
 	"vent": [KEY_R], "build": [KEY_F], "cycle": [KEY_TAB], "pause": [KEY_ESCAPE, KEY_P],
 	"sel1": [KEY_1], "sel2": [KEY_2], "sel3": [KEY_3], "sel4": [KEY_4], "sel5": [KEY_5],
 	"confirm": [KEY_E, KEY_ENTER, KEY_SPACE], "back": [KEY_Q, KEY_BACKSPACE], "ready": [KEY_G, KEY_ENTER],
 }
 const KB2_KEYS := {
 	"up": [KEY_UP], "down": [KEY_DOWN], "left": [KEY_LEFT], "right": [KEY_RIGHT],
-	"fire": [KEY_SLASH, KEY_KP_0], "alt": [KEY_PERIOD, KEY_KP_PERIOD],
+	"fire": [KEY_SLASH, KEY_KP_0], "alt": [KEY_PERIOD, KEY_KP_PERIOD], "jump": [KEY_COMMA, KEY_KP_6],
 	"sprint": [KEY_APOSTROPHE, KEY_KP_ENTER], "interact": [KEY_SEMICOLON, KEY_KP_1],
 	"spit": [KEY_BRACKETLEFT, KEY_KP_2], "vent": [KEY_BRACKETRIGHT, KEY_KP_3],
 	"build": [KEY_L, KEY_KP_4], "cycle": [KEY_K, KEY_KP_5], "pause": [KEY_BACKSPACE],
@@ -30,7 +30,8 @@ const KB2_KEYS := {
 const PAD_BUTTONS := {
 	"interact": [JOY_BUTTON_A], "spit": [JOY_BUTTON_B], "vent": [JOY_BUTTON_X],
 	"build": [JOY_BUTTON_Y], "cycle": [JOY_BUTTON_RIGHT_SHOULDER],
-	"sprint": [JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_LEFT_STICK], "pause": [JOY_BUTTON_START],
+	"sprint": [JOY_BUTTON_LEFT_SHOULDER], "jump": [JOY_BUTTON_LEFT_STICK, JOY_BUTTON_RIGHT_STICK],
+	"pause": [JOY_BUTTON_START],
 	"up": [JOY_BUTTON_DPAD_UP], "down": [JOY_BUTTON_DPAD_DOWN],
 	"left": [JOY_BUTTON_DPAD_LEFT], "right": [JOY_BUTTON_DPAD_RIGHT],
 	"confirm": [JOY_BUTTON_A], "back": [JOY_BUTTON_B], "ready": [JOY_BUTTON_BACK],
@@ -38,15 +39,15 @@ const PAD_BUTTONS := {
 
 # Human-readable glyphs for HUD prompts.
 const GLYPH_KBM := {
-	"fire": "LMB", "alt": "RMB", "sprint": "SHIFT", "interact": "E", "spit": "Q", "vent": "R",
+	"fire": "LMB", "alt": "RMB", "jump": "SPACE", "sprint": "SHIFT", "interact": "E", "spit": "Q", "vent": "R",
 	"build": "F", "cycle": "TAB", "pause": "ESC", "confirm": "E", "back": "Q", "ready": "G",
 }
 const GLYPH_KB2 := {
-	"fire": "/", "alt": ".", "sprint": "'", "interact": ";", "spit": "[", "vent": "]",
+	"fire": "/", "alt": ".", "jump": ",", "sprint": "'", "interact": ";", "spit": "[", "vent": "]",
 	"build": "L", "cycle": "K", "pause": "BKSP", "confirm": "ENTER", "back": "BKSP", "ready": "\\",
 }
 const GLYPH_PAD := {
-	"fire": "RT", "alt": "LT", "sprint": "LB", "interact": "(A)", "spit": "(B)", "vent": "(X)",
+	"fire": "RT", "alt": "LT", "jump": "L3", "sprint": "LB", "interact": "(A)", "spit": "(B)", "vent": "(X)",
 	"build": "(Y)", "cycle": "RB", "pause": "START", "confirm": "(A)", "back": "(B)", "ready": "SELECT",
 }
 

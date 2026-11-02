@@ -20,6 +20,12 @@ func draw(ci: RatEnemy) -> void:
 	ci.draw_sprite("rat_squeaker_%d" % ci.anim_frame())
 
 
+## Drawn while the rat is still crawling out of its burrow (spawn_t > 0).
+func draw_spawning(ci: RatEnemy) -> void:
+	var t := PixelArt.tex("rat_squeaker_0")
+	ci.draw_texture_rect_region(t, Rect2(-8, -4, 16, 4), Rect2(2, 0, 16, 4))
+
+
 func on_damaged(_amount: float, _info: Dictionary) -> void:
 	pass
 

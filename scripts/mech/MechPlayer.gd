@@ -58,6 +58,17 @@ var invert_t := 0.0
 var invert_cd := 14.0
 var dash_t := 0.0
 var dash_dir := Vector2.ZERO
+# Soda-Bottle Jetpack hop
+const HOP_TIME := 0.42
+const HOP_SPEED := 150.0
+const HOP_HEIGHT := 16.0
+var hop_t := 0.0
+var hop_dur := 0.0
+var hop_dir := Vector2.ZERO
+var hop_z := 0.0
+var _hop_extend := 0
+var _visual_base := Vector2.ZERO
+var _weapon_base := Vector2.ZERO
 var ready_pressed := false
 var context := ""              # current interaction prompt text
 var context_ok := true
@@ -95,8 +106,10 @@ func _ready() -> void:
 	wheel.vented.connect(_on_vented)
 	wheel.spun_out.connect(_on_spun_out)
 	weapon.position = Vector2(0, -9) if chassis == "brawler" else Vector2(0, -25)
+	_visual_base = visual.position
+	_weapon_base = weapon.position
 	collision_layer = GameManager.L_PLAYERS
-	collision_mask = GameManager.L_WORLD | GameManager.L_TOWERS
+	collision_mask = GameManager.L_WORLD | GameManager.L_TOWERS | GameManager.L_CLIFF
 	overlay.draw.connect(_draw_overlay)
 	add_to_group("players")
 
@@ -154,6 +167,7 @@ func _physics_process(delta: float) -> void:
 		overlay.queue_redraw()
 		return
 	invuln = maxf(0.0, invuln - delta)
+	queue_redraw()
 	blood_brothers_t = maxf(0.0, blood_brothers_t - delta)
 	_process_warp(delta)
 	var move := input.move
@@ -176,9 +190,30 @@ func _physics_process(delta: float) -> void:
 		dash_t -= delta
 		desired = dash_dir * 330.0
 		_dash_damage()
+	if hop_t > 0.0:
+		hop_t -= delta
+		desired = hop_dir * HOP_SPEED
+		hop_z = sin(clampf(1.0 - hop_t / hop_dur, 0.0, 1.0) * PI) * HOP_HEIGHT
+		if randf() < 0.7:
+			GameManager.arena.fx.fire(global_position + Vector2(randf_range(-3, 3), -hop_z - 4), 1)
+		if hop_t <= 0.0:
+			_land()
 	velocity = desired + knock
 	knock = knock.move_toward(Vector2.ZERO, 600.0 * delta)
 	move_and_slide()
+	# Jetpack: sprinting into a cliff (or pressing jump) rockets over it
+	if hop_t <= 0.0 and stats.has_flag("jetpack") and not wheel.is_spinning():
+		if input.just("jump"):
+			start_hop(move if move.length() > 0.2 else aim_dir)
+		elif sprinting and move.length() > 0.3:
+			for i in get_slide_collision_count():
+				var col := get_slide_collision(i)
+				var obj = col.get_collider()
+				if obj != null and obj.name == "Cliffs" and move.normalized().dot(-col.get_normal()) > 0.5:
+					start_hop(move)
+					break
+	visual.position = _visual_base - Vector2(0, hop_z)
+	weapon.position = _weapon_base - Vector2(0, hop_z)
 	# --- aim
 	if input.aim_explicit:
 		aim_dir = input.aim
@@ -342,6 +377,55 @@ func _on_sprint_trail() -> void:
 		arena.fx.dust(global_position, 1)
 
 
+func start_hop(dir: Vector2) -> void:
+	hop_dir = dir.normalized()
+	hop_t = HOP_TIME
+	hop_dur = HOP_TIME
+	_hop_extend = 0
+	collision_mask = GameManager.L_WORLD | GameManager.L_TOWERS
+	invuln = maxf(invuln, HOP_TIME)
+	if not stats.has_flag("no_overheat"):
+		wheel.heat = minf(95.0, wheel.heat + 15.0)
+	var arena = GameManager.arena
+	arena.fx.burst(global_position, 10, [PixelArt.C["w"], PixelArt.C["u"], PixelArt.C["a"]], 30, 90, 0.2, 0.5, 1.0, 40.0)
+	arena.fx.ring(global_position, 12.0, PixelArt.C["a"], 0.2)
+	Sfx.play("throw", 0.55, -2.0)
+	Sfx.play("vent", 1.6, -10.0)
+	if randf() < 0.2:
+		JuiceManager.bark(self, ["FIZZY LIFTOFF!", "WHEEE!", "SODA POWER!"][randi() % 3])
+
+
+func _land() -> void:
+	var map = GameManager.arena.map
+	var c: Vector2i = ArenaMap.to_cell(global_position)
+	if map.blocks_walker(c):
+		if _hop_extend < 5:
+			# still above a cliff face / prop: keep flying a little further
+			_hop_extend += 1
+			hop_t = 0.06
+			hop_dur = maxf(hop_dur, 0.06)
+			return
+		# give up: snap to the nearest free cell
+		var best := global_position
+		var bd := INF
+		for dy in range(-2, 3):
+			for dx in range(-2, 3):
+				var n := c + Vector2i(dx, dy)
+				if not map.blocks_walker(n) and map.in_bounds(n):
+					var d := global_position.distance_to(ArenaMap.cell_center(n))
+					if d < bd:
+						bd = d
+						best = ArenaMap.cell_center(n)
+		global_position = best
+	hop_t = 0.0
+	hop_z = 0.0
+	collision_mask = GameManager.L_WORLD | GameManager.L_TOWERS | GameManager.L_CLIFF
+	GameManager.arena.fx.dust(global_position, 8)
+	GameManager.arena.fx.ring(global_position, 14.0, PixelArt.C["t"], 0.25)
+	JuiceManager.add_trauma(0.12)
+	Sfx.play("punch", 0.6, -8.0)
+
+
 func start_dash(dir: Vector2) -> void:
 	dash_dir = dir
 	dash_t = 0.2
@@ -398,6 +482,12 @@ func _go_down() -> void:
 	hp = 0.0
 	downed = true
 	down_t = 0.0
+	if hop_t > 0.0:
+		hop_t = 0.0
+		hop_z = 0.0
+		collision_mask = GameManager.L_WORLD | GameManager.L_TOWERS | GameManager.L_CLIFF
+		visual.position = _visual_base
+		weapon.position = _weapon_base
 	revive_progress = 0.0
 	dumping = false
 	dash_t = 0.0
@@ -486,8 +576,8 @@ func _on_spun_out() -> void:
 # ------------------------------------------------------------------ draw
 
 func _draw() -> void:
-	# ground shadow
-	var w := 18.0 if chassis == "brawler" else 22.0
+	# ground shadow (shrinks while jetpacking)
+	var w := (18.0 if chassis == "brawler" else 22.0) * (1.0 - hop_z / (HOP_HEIGHT * 2.0))
 	draw_rect(Rect2(-w / 2.0, -2, w, 3), Color(0, 0, 0, 0.28))
 	draw_rect(Rect2(-w / 2.0 + 2, -3, w - 4, 1), Color(0, 0, 0, 0.18))
 
@@ -507,11 +597,11 @@ func _draw_overlay() -> void:
 		var at := ArenaMap.cell_center(preview_pad) - global_position
 		var a := 0.35 + 0.15 * sin(Time.get_ticks_msec() * 0.008)
 		overlay.draw_texture(PixelArt.tex("tower_base"), at + Vector2(-10, -6), Color(1, 1, 1, a))
-		var r: float = GameManager.TOWER_INFO[kind]["range"] * GameManager.gstats.g("tower_range_mult", 1.0)
-		PixelArt.draw_ring(overlay, at, r, Color(col, 0.55), int(r * 1.2))
+		TowerBase.draw_range_preview(overlay, kind, at, 1, ArenaMap.cell_center(preview_pad))
 	elif preview_tower != null and is_instance_valid(preview_tower):
 		var at2: Vector2 = preview_tower.global_position - global_position
-		PixelArt.draw_ring(overlay, at2, preview_tower.range_radius(), Color(1, 1, 1, 0.3), int(preview_tower.range_radius() * 1.2))
+		var lvl: int = mini(preview_tower.level + 1, GameManager.MAX_TOWER_LEVEL)
+		TowerBase.draw_range_preview(overlay, preview_tower.kind, at2, lvl, preview_tower.global_position)
 	# player tag
 	PixelArt.draw_text_centered(overlay, Vector2(0, top + 2), tag, col)
 	# context prompt on a dark plate

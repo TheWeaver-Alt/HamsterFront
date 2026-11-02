@@ -34,6 +34,7 @@ var seed_value: int = 2
 var mass: float = 1.0
 var is_boss := false
 var alive := true
+var hp_scale: float = 1.0     # wave HP multiplier only (excludes difficulty), for brains scaling damage
 
 # status
 var stun_t := 0.0
@@ -67,10 +68,11 @@ var _silo_bark_done := false
 
 func setup(k: String, hp_mult: float = 1.0, speed_mult: float = 1.0) -> void:
 	kind = k
+	hp_scale = hp_mult
 	var cfg: Dictionary = KINDS.get(k, KINDS["squeaker"])
-	max_hp = float(cfg["hp"]) * hp_mult
+	max_hp = float(cfg["hp"]) * hp_mult * GameManager.enemy_hp_mult()
 	hp = max_hp
-	speed = float(cfg["speed"]) * speed_mult * randf_range(0.9, 1.1)
+	speed = float(cfg["speed"]) * speed_mult * GameManager.enemy_speed_mult() * randf_range(0.9, 1.1)
 	radius = float(cfg["radius"])
 	bite_dmg = float(cfg["bite"]) * (1.0 + (hp_mult - 1.0) * 0.5)
 	bite_rate = float(cfg["bite_rate"])
@@ -219,6 +221,15 @@ func _separation() -> Vector2:
 	return push
 
 
+## True when this rat may walk straight at `pos` (same elevation, or a ramp involved).
+## Otherwise it should keep following the flow field.
+func can_walk_to(pos: Vector2) -> bool:
+	var arena = GameManager.arena
+	if arena == null or arena.map == null:
+		return true
+	return arena.map.same_level(global_position, pos)
+
+
 func attack_reach() -> float:
 	return radius + 3.0
 
@@ -246,24 +257,24 @@ func _pick_target() -> void:
 	target = null
 	target_is_silo = true
 	var decoy = arena.taunting_decoy(global_position)
-	if decoy != null:
+	if decoy != null and can_walk_to(decoy.global_position):
 		target = decoy
 		target_is_silo = false
 		return
 	for p in GameManager.players:
 		if is_instance_valid(p) and not p.downed and p.stats.has_flag("rat_magnet") \
-				and p.global_position.distance_to(global_position) < 130.0:
+				and p.global_position.distance_to(global_position) < 130.0 and can_walk_to(p.global_position):
 			target = p
 			target_is_silo = false
 			return
 	if chewer:
 		var t = arena.tower_near(global_position, 40.0)
-		if t != null:
+		if t != null and can_walk_to(t.global_position):
 			target = t
 			target_is_silo = false
 			return
 	var pl := GameManager.nearest_player(global_position, 22.0)
-	if pl != null:
+	if pl != null and can_walk_to(pl.global_position):
 		target = pl
 		target_is_silo = false
 
@@ -301,8 +312,10 @@ func take_damage(amount: float, from_pos: Vector2 = Vector2.INF, knockback: floa
 	amount *= 1.0 + melt
 	amount = brain.modify_damage(amount, info)
 	var quiet: bool = info.get("quiet", false)
-	if not quiet:
-		_flash = 1.0
+	if not quiet and _flash < 0.2:
+		# flash strength scales with the hit; only re-trigger once faded so tanky rats
+		# under sustained fire flicker instead of turning into a white silhouette
+		_flash = clampf(0.45 + amount / maxf(max_hp, 1.0) * 6.0, 0.45, 1.0)
 	if knockback > 0.0 and from_pos != Vector2.INF:
 		knock += (global_position - from_pos).normalized() * knockback / mass
 	var burn: float = info.get("burn", 0.0)
@@ -372,8 +385,7 @@ func draw_sprite(sprite_name: String, offset: Vector2 = Vector2.ZERO, modulate_c
 func _draw() -> void:
 	if spawn_t > 0.0:
 		# crawling out of the burrow: only the head pokes out
-		var t := PixelArt.tex("rat_squeaker_0")
-		draw_texture_rect_region(t, Rect2(-8, -4, 16, 4), Rect2(2, 0, 16, 4))
+		brain.draw_spawning(self)
 		return
 	draw_rect(Rect2(-radius, -1, radius * 2.0, 2), Color(0, 0, 0, 0.25))
 	brain.draw(self)

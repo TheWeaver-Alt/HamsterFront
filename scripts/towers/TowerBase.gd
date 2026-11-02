@@ -92,9 +92,20 @@ func refresh_range() -> void:
 
 # ------------------------------------------------------------------ stat helpers
 
+const HIGH_GROUND_RANGE := 1.15
+
+
 func range_radius() -> float:
 	return float(GameManager.TOWER_INFO[kind]["range"]) * (1.0 + 0.1 * (level - 1)) \
-		* GameManager.gstats.g("tower_range_mult", 1.0) * brain.range_mult()
+		* GameManager.gstats.g("tower_range_mult", 1.0) * brain.range_mult() * high_ground_mult(global_position)
+
+
+## Towers on a plateau see further (+15% range).
+static func high_ground_mult(pos: Vector2) -> float:
+	var arena = GameManager.arena
+	if arena != null and arena.map != null and arena.map.is_high_ground(pos):
+		return HIGH_GROUND_RANGE
+	return 1.0
 
 
 func damage_mult() -> float:
@@ -119,6 +130,57 @@ func is_overdrive() -> bool:
 
 func taunt_radius() -> float:
 	return brain.taunt_radius()
+
+
+func get_bark_offset() -> float:
+	return -32.0
+
+
+## Adds a child canvas layer drawn above the y-sorted world (beams, arcs...).
+## `draw_cb` is connected to the layer's draw signal; call layer.queue_redraw() each frame.
+func add_fx_layer(draw_cb: Callable, z: int = 12) -> Node2D:
+	var layer := Node2D.new()
+	layer.z_index = z
+	layer.name = "FxLayer"
+	layer.draw.connect(draw_cb)
+	add_child(layer)
+	return layer
+
+
+## Range radius a tower kind would have at a level (used for previews before it exists).
+static func preview_radius(k: String, lvl: int = 1, world_pos: Vector2 = Vector2.INF) -> float:
+	var r := float(GameManager.TOWER_INFO[k]["range"]) * (1.0 + 0.1 * (lvl - 1)) \
+		* GameManager.gstats.g("tower_range_mult", 1.0)
+	if world_pos != Vector2.INF:
+		r *= high_ground_mult(world_pos)
+	return r
+
+
+## Dotted pixel range circle for a tower kind (build ghost / upgrade preview).
+## Decoys show their taunt radius in pink.
+## `world_pos` (optional) is the tower's spot in the arena, used for the high-ground bonus.
+static func draw_range_preview(ci: CanvasItem, k: String, pos: Vector2, lvl: int = 1, world_pos: Vector2 = Vector2.INF) -> void:
+	if not GameManager.TOWER_INFO.has(k):
+		return
+	var r := preview_radius(k, lvl, world_pos)
+	var col := Color(1.0, 0.84, 0.25, 0.75)
+	if k == "decoy":
+		col = Color(1.0, 0.59, 0.71, 0.75)
+	elif k == "mortar":
+		# show the minimum range too
+		_dotted_ring(ci, pos, 40.0, Color(1.0, 0.35, 0.25, 0.5), 3)
+	_dotted_ring(ci, pos, r, col, 2)
+	ci.draw_rect(Rect2(pos.round() - Vector2(1, 1), Vector2(2, 2)), col)
+
+
+static func _dotted_ring(ci: CanvasItem, center: Vector2, r: float, col: Color, gap: int) -> void:
+	var n := maxi(16, int(r * 2.2))
+	var phase := int(Time.get_ticks_msec() / 120) % gap
+	for i in n:
+		if (i + phase) % gap != 0:
+			continue
+		var a := TAU * i / n
+		ci.draw_rect(Rect2(roundf(center.x + cos(a) * r), roundf(center.y + sin(a) * r), 1, 1), col)
 
 
 # ------------------------------------------------------------------ targeting
@@ -209,6 +271,7 @@ func take_damage(amount: float, _source = null) -> void:
 	amount *= GameManager.gstats.g("tower_damage_taken_mult", 1.0)
 	hp -= amount
 	_flash = 0.8
+	brain.on_damaged(amount)
 	if hp <= 0.0:
 		destroy()
 
@@ -276,9 +339,11 @@ func _draw_visual() -> void:
 	# ground shadow + crate
 	visual.draw_rect(Rect2(-10, 4, 20, 3), Color(0, 0, 0, 0.25))
 	if brain.draws_base():
-		visual.draw_texture(PixelArt.tex("tower_base"), Vector2(-10, -6))
+		visual.draw_texture(PixelArt.tex("tower_base_%d" % level), Vector2(-10, -6))
 	brain.draw(visual)
 	visual.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if is_overdrive():
+		_draw_sugar_ring()
 	# level pips
 	for i in level:
 		visual.draw_rect(Rect2(-5 + i * 4, 5, 2, 2), PixelArt.C["y"])
@@ -288,3 +353,14 @@ func _draw_visual() -> void:
 	if is_overdrive():
 		var left := overcharge_timer.time_left / maxf(overcharge_timer.wait_time, 0.01)
 		PixelArt.draw_bar(visual, Rect2(-8, 11, 16, 1), left, PixelArt.C["p"], PixelArt.C["k"], false)
+
+
+## Orbiting candy sprinkles around an overdriven tower.
+func _draw_sugar_ring() -> void:
+	var cols := [PixelArt.C["r"], PixelArt.C["y"], PixelArt.C["u"], PixelArt.C["p"], PixelArt.C["Z"], PixelArt.C["v"]]
+	var n := 10
+	for i in n:
+		var a := anim_t * 3.0 + TAU * i / n
+		var p := Vector2(cos(a) * 13.0, -6.0 + sin(a) * 5.0)
+		var c: Color = cols[i % cols.size()]
+		visual.draw_rect(Rect2(p.round(), Vector2(2 if i % 2 == 0 else 1, 1)), c)

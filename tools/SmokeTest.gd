@@ -35,6 +35,11 @@ func _ready() -> void:
 			take_shots = true
 		elif a == "--spawn-all":
 			spawn_all = true
+		elif a.begins_with("--learning="):
+			var lv := int(a.get_slice("=", 1))
+			GameManager.learning_levels = [lv, lv]
+		elif a == "--kid":
+			GameManager.difficulty = "kid"
 		elif a.begins_with("--stress="):
 			stress = int(a.get_slice("=", 1))
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -45,6 +50,7 @@ func _ready() -> void:
 	add_child(arena)
 	for p in GameManager.players:
 		p.input.set_device("bot")
+		p.stats.set_flag("jetpack")   # bots hop cliffs to reach plateau pads
 	GameManager.seeds = 400
 	GameManager.seeds_changed.emit(GameManager.seeds)
 	Engine.time_scale = speed
@@ -98,22 +104,32 @@ func _drive_bots(delta: float) -> void:
 		var held := {}
 		var move := Vector2.ZERO
 		var target = arena.nearest_enemy(p.global_position, 200.0)
-		if GameManager.phase == "draft":
+		var quiz_up: bool = arena.math_quiz != null and arena.math_quiz.active
+		if GameManager.phase == "draft" or quiz_up:
 			# mash confirm on alternate frames so the draft UI sees presses
 			held["confirm"] = frame % 6 < 3
 			if frame % 40 == 0:
 				held["right"] = true
 		else:
-			# build phase: walk to free pads and build
-			if GameManager.phase == "build" and _built < 10:
+			# build phase: spend seeds on new towers, then upgrades (sprinting = jetpack hops)
+			var build_dest := Vector2.INF
+			if GameManager.phase == "build" and GameManager.seeds >= 40:
 				var pad := _nearest_free_pad(p.global_position)
-				if pad != Vector2i(-1, -1):
-					var dest := ArenaMap.cell_center(pad)
-					move = (dest - p.global_position).normalized() if p.global_position.distance_to(dest) > 4.0 else Vector2.ZERO
-					if p.global_position.distance_to(dest) < 10.0 and frame % 20 == 0:
+				if pad != Vector2i(-1, -1) and _built < 16:
+					build_dest = ArenaMap.cell_center(pad)
+					if p.global_position.distance_to(build_dest) < 10.0 and frame % 20 == 0:
 						p.selected_tower = (_built + i) % 5
 						held["build"] = true
 						_built += 1
+				else:
+					var tw = _cheapest_upgrade(p.global_position)
+					if tw != null:
+						build_dest = tw.global_position + Vector2(0, 14)
+						if p.global_position.distance_to(build_dest) < 12.0 and frame % 20 == 0:
+							held["build"] = true
+			if build_dest != Vector2.INF:
+				move = (build_dest - p.global_position).normalized() if p.global_position.distance_to(build_dest) > 4.0 else Vector2.ZERO
+				held["sprint"] = true
 			elif p.pouch.fill() > 0.8:
 				# go bank (or cram a tower if one is right here)
 				var to_silo: Vector2 = ArenaMap.SILO_CENTER + Vector2(0, 34) - p.global_position
@@ -133,17 +149,32 @@ func _drive_bots(delta: float) -> void:
 				if p.global_position.distance_to(target.global_position) < 30.0 and frame % 30 == i:
 					held["alt"] = true
 			# sprint in bursts to exercise the wheel, vent sometimes
-			if int(_bot_t * 0.5 + i) % 3 == 0:
+			if build_dest == Vector2.INF and int(_bot_t * 0.5 + i) % 3 == 0:
 				held["sprint"] = true
 			if p.wheel.heat > 70.0 and frame % 50 == 0 and randf() < 0.5:
 				held["vent"] = true
 			if p.pouch.amount > 20 and frame % 600 == 300 + i:
 				held["spit"] = true
-			if GameManager.phase == "build" and _built >= 6 and frame % 30 == 0:
+			if GameManager.phase == "build" and (GameManager.seeds < 40 or arena.build_timer < 8.0) and frame % 30 == 0:
 				held["ready"] = true
 		inp.bot_move = move
 		inp.bot_held = held
 		i += 1
+
+
+func _cheapest_upgrade(pos: Vector2):
+	var best = null
+	var bd := INF
+	for t in arena.towers:
+		if not is_instance_valid(t) or t.level >= GameManager.MAX_TOWER_LEVEL:
+			continue
+		if GameManager.tower_cost(t.kind, t.level + 1) > GameManager.seeds:
+			continue
+		var d := pos.distance_to(t.global_position)
+		if d < bd:
+			bd = d
+			best = t
+	return best
 
 
 func _nearest_free_pad(pos: Vector2) -> Vector2i:

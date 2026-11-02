@@ -73,6 +73,9 @@ var cards: Array = [
 	{"id": "radiator_fins", "tier": "mod", "name": "RADIATOR FINS", "weight": 8, "max": 2,
 		"desc": "WHEEL COOLS 60% FASTER. VENTING HEALS 10 HP.",
 		"mods": {"mul": {"heat_decay": 1.6}, "add": {"vent_heal": 10}}},
+	{"id": "jetpack", "tier": "mod", "name": "SODA-BOTTLE JETPACK", "weight": 11, "max": 1,
+		"desc": "SPRINT INTO A CLIFF (OR PRESS JUMP) TO ROCKET UP OR DOWN IT.",
+		"mods": {"flags": ["jetpack"]}},
 	{"id": "bubble_wrap", "tier": "mod", "name": "BUBBLE WRAP ARMOR", "weight": 8, "max": 3,
 		"desc": "TAKE 20% LESS DAMAGE. POP POP.",
 		"mods": {"mul": {"damage_taken": 0.8}}},
@@ -225,6 +228,9 @@ func _weight(card: Dictionary) -> float:
 	# corruptions get more common as the siege drags on
 	if card["tier"] == "cursed":
 		w *= 1.0 + 0.08 * GameManager.wave
+	# the jetpack opens up the high ground: offer it often early on
+	if card["id"] == "jetpack" and GameManager.wave <= 3:
+		w *= 3.0
 	return w
 
 

@@ -71,6 +71,33 @@ func _ready() -> void:
 	gstats = _make_gstats()
 
 
+## F11 / Alt+Enter: toggle fullscreen <-> 1280x720 window (works everywhere, even paused).
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	var k: InputEventKey = event
+	if k.physical_keycode == KEY_F11 or (k.physical_keycode == KEY_ENTER and k.alt_pressed):
+		toggle_fullscreen()
+		get_viewport().set_input_as_handled()
+
+
+func is_fullscreen() -> bool:
+	var m := DisplayServer.window_get_mode()
+	return m == DisplayServer.WINDOW_MODE_FULLSCREEN or m == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+
+
+func toggle_fullscreen() -> void:
+	if is_fullscreen():
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		var size := Vector2i(1280, 720)
+		DisplayServer.window_set_size(size)
+		var screen := DisplayServer.window_get_current_screen()
+		var origin := DisplayServer.screen_get_position(screen) + (DisplayServer.screen_get_size(screen) - size) / 2
+		DisplayServer.window_set_position(origin)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+
 func _make_gstats() -> StatBlock:
 	return StatBlock.new({
 		"tower_cost_mult": 1.0, "tower_damage_mult": 1.0, "tower_fire_rate_mult": 1.0,

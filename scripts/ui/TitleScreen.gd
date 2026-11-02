@@ -207,6 +207,15 @@ func _update_seeds(delta: float) -> void:
 
 # ------------------------------------------------------------------ draw
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
+		if _show_controls:
+			_show_controls = false
+		else:
+			get_tree().quit()
+		get_viewport().set_input_as_handled()
+
+
 func _draw() -> void:
 	_draw_backdrop()
 	_draw_logo()
@@ -407,6 +416,9 @@ func _draw_footer() -> void:
 		PixelArt.draw_text_centered(self, Vector2(320, 296), "JOIN WITH ANY DEVICE. TWO PILOTS? SHARE THE KEYBOARD OR GRAB PADS.", PixelArt.C["W"], true)
 	PixelArt.draw_text_centered(self, Vector2(320, 329), "[TAB] / (Y)  CONTROLS & HOW TO PLAY", PixelArt.C["u"], true)
 	PixelArt.draw_text_centered(self, Vector2(320, 340), "THE UNDER-SCURRIERS WANT THE STRIPED ONES. STOP THEM.", PixelArt.C["z"], true)
+	PixelArt.draw_text(self, Vector2(6, 351), "ESC: QUIT", PixelArt.C["G"].lightened(0.3))
+	var fs := "F11: WINDOW" if GameManager.is_fullscreen() else "F11: FULLSCREEN"
+	PixelArt.draw_text(self, Vector2(634 - PixelArt.text_width(fs), 351), fs, PixelArt.C["G"].lightened(0.3))
 
 
 func _draw_controls_page() -> void:

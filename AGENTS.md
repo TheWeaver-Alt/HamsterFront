@@ -1,6 +1,6 @@
 # HamsterFront
 
-Defence of Hamsterland: Mech-Pouch Protocol. A 2D top-down action tower defense roguelite for 1-2 players (local co-op), built in Godot 4 with GDScript.
+A 2D top-down action tower defense roguelite for 1-2 players (local co-op), built in Godot 4 with GDScript.
 
 <!-- project-kit 1.0.0: the rules for every coding agent (Claude Code, Codex, Copilot). CLAUDE.md imports this file. Rules only this project has go under "Project rules". -->
 

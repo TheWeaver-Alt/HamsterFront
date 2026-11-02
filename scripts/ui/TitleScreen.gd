@@ -335,10 +335,8 @@ func _draw_hedge() -> void:
 
 
 func _draw_logo() -> void:
-	var top_drop := 1.0 - _ease_back(clampf(_t / 0.45, 0.0, 1.0))
-	PixelArt.draw_text_centered(self, Vector2(320, 14 + roundf(sin(_t * 2.0)) - top_drop * 40.0), "DEFENCE OF", PixelArt.C["y"], true, 12)
-	# per-letter HAMSTERLAND: letters drop in one by one, then bob; a shine sweeps across
-	var word := "HAMSTERLAND"
+	# per-letter HAMSTERFRONT: letters drop in one by one, then bob; a shine sweeps across
+	var word := "HAMSTERFRONT"
 	var size := 30
 	var total := PixelArt.text_width(word, size)
 	var x := 320.0 - total / 2.0

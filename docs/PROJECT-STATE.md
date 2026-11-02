@@ -50,11 +50,20 @@
 | 2026-11-02 | Silo keeps its HP and gains a seed store with capacity; seeds are the universal currency | owner | [ADR-0002](adr/0002-silo-hp-and-seed-store.md) |
 | 2026-11-02 | Robot and octopus from the start; tank and drone unlock in the Workshop (to go into the Workshop's ADR) | owner | this file |
 | 2026-11-02 | Build order: economy, chassis, cards, Workshop; visual puzzles in parallel | owner | this file |
+| 2026-11-02 | The game is called HamsterFront (was "Defence of Hamsterland: Mech-Pouch Protocol"). The title screen keeps "MECH-POUCH PROTOCOL" as its subtitle. | owner | `project.godot`, `README.md` |
 | 2026-11-02 | Aligned to project-kit 1.0.0 | owner | `.claude/project-kit.json` |
 | 2026-11-02 | Commit the `.uid` files Godot 4.4+ writes | owner | `AGENTS.md` (Project rules) |
 | 2026-11-02 | GitHub's default branch is `main` | owner | GitHub repo settings |
 
 ## Session log
+
+### 2026-11-02 · Renamed to HamsterFront
+
+- The old name is gone from `project.godot` (name and header, so the window title too), `README.md`, `PRODUCT.md`, `AGENTS.md`, `.claude/project-kit.json`, the three export presets (product name, file description, company) and `tools/ArtPreview.gd`. The export paths and bundle id already said HamsterFront.
+- Title screen (`scripts/ui/TitleScreen.gd`): the per-letter logo now spells HAMSTERFRONT and the small "DEFENCE OF" line above it is removed. "MECH-POUCH PROTOCOL" stays as the subtitle. Checked on a rendered screenshot: it fits and the shine and drop-in still work.
+- Done before any save file exists, because Godot derives the `user://` folder from the project name and the Workshop will write there.
+- Checks: `bash tools/check.sh`: `check: PASS` (kills=204, silo 1352/1500). `kit.py check`: 28 OK, 0 to fix.
+- Committed on `main`, not pushed.
 
 ### 2026-11-02 · Freed-lambda error fixed
 

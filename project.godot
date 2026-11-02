@@ -1,11 +1,11 @@
 ; Engine configuration file.
-; Defence of Hamsterland: Mech-Pouch Protocol
+; HamsterFront
 
 config_version=5
 
 [application]
 
-config/name="Defence of Hamsterland: Mech-Pouch Protocol"
+config/name="HamsterFront"
 config/description="2D top-down action tower defense roguelite. 1-2 player local co-op."
 run/main_scene="res://scenes/TitleScreen.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")

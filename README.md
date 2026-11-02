@@ -1,4 +1,4 @@
-# Defence of Hamsterland: Mech-Pouch Protocol
+# HamsterFront
 
 A 2D top-down action tower defense roguelite for 1–2 players (local co-op), built in **Godot 4.3+** with GDScript.
 

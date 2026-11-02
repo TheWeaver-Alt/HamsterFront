@@ -72,7 +72,7 @@ func _draw() -> void:
 	PixelArt.draw_text(self, Vector2(4, y), "ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789 !?.,'-+:/%()[]#@&*=<>_$", Color.WHITE)
 	PixelArt.draw_text_outlined(self, Vector2(4, y + 10), "Mmphf! Caffn't... ffit... mmore... sfeeds!", Color8(255, 214, 64))
 	PixelArt.draw_text(self, Vector2(4, y + 22), "WITNESS MY FLUFFY WRATH!", Color8(255, 150, 70), 12)
-	PixelArt.draw_text_centered(self, Vector2(320, y + 40), "DEFENCE OF HAMSTERLAND", Color8(255, 248, 231), true, 18)
+	PixelArt.draw_text_centered(self, Vector2(320, y + 40), "HAMSTERFRONT", Color8(255, 248, 231), true, 18)
 	PixelArt.draw_bar(self, Rect2(4, y + 64, 80, 4), 0.6, Color8(226, 64, 64))
 	PixelArt.draw_disk(self, Vector2(120, y + 70), 6, Color8(70, 210, 60))
 	PixelArt.draw_box(self, Rect2(140, y + 60, 60, 16), Color8(255, 248, 231))

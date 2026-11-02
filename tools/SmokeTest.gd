@@ -13,6 +13,8 @@ var speed := 3.0
 var take_shots := false
 var spawn_all := false
 var stress := 0
+var _hops := 0
+var _was_hopping: Dictionary = {}
 var _perf_samples: Array = []
 var t := 0.0
 var frame := 0
@@ -64,6 +66,11 @@ func _physics_process(delta: float) -> void:
 	if Engine.time_scale > 0.2 and Engine.time_scale < speed and GameManager.phase != "gameover":
 		Engine.time_scale = speed
 	_drive_bots(delta)
+	for p in GameManager.players:
+		var h: bool = p.hop_t > 0.0
+		if h and not _was_hopping.get(p.player_id, false):
+			_hops += 1
+		_was_hopping[p.player_id] = h
 	if stress > 0 and frame == 60:
 		for k in stress:
 			var b: Vector2i = ArenaMap.BURROWS[k % ArenaMap.BURROWS.size()]
@@ -198,6 +205,7 @@ func _finish() -> void:
 	print("[smoke] DONE phase=%s wave=%d max_wave=%d kills=%d silo=%.0f/%.0f seeds=%d towers=%d enemies=%d cards=%s" % [
 		GameManager.phase, GameManager.wave, _max_wave, GameManager.kills, GameManager.silo_hp, GameManager.silo_max_hp,
 		GameManager.seeds, arena.towers.size(), arena.enemies.size(), GameManager.owned_cards])
+	print("[smoke] jetpack hops=%d math_stars=%d asked=%d" % [_hops, GameManager.math_stars, GameManager.math_asked])
 	for p in GameManager.players:
 		print("[smoke] P%d %s hp=%.0f/%.0f pouch=%d heat=%.0f cards=%s" % [p.player_id, p.chassis, p.hp, p.max_hp(), p.pouch.amount, p.wheel.heat, p.owned_cards])
 	get_tree().quit()

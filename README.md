@@ -24,7 +24,8 @@ godot --path .
 
 ## How to play
 
-- Rats crawl out of burrows at the edge of the yard and follow the paths to the Silo. If the Silo's seed pile runs out, the run is over.
+- The Backyard is a ¾-view garden with height. **Plateaus** with cliff faces separate **three canyon lanes**. Rats crawl out of burrows on the west side and funnel down the lanes to the Silo on the patio courtyard. Later waves open burrows in the courtyard itself. If the Silo's seed pile runs out, the run is over.
+- Most tower pads are up on the plateaus, where forks can't reach them but snipers, gas and thrown rats still can. Towers on high ground get **+15% range**. Mechs reach the plateaus by **ramps and stairs**, or with the **Soda-Bottle Jetpack** card: sprint into a cliff (or press jump) to rocket up or down it.
 - Dead rats drop seeds. Your mech **vacuums them into the pilot's cheek pouch**. The fuller the pouch, the bigger the hamster's head and the slower the mech (up to -40%).
 - Spend a full pouch in one of three ways:
   - **Bank** it at the Silo to earn seeds for building.
@@ -34,6 +35,20 @@ godot --path .
 - **Build towers** on the wooden pads, and **upgrade** them up to level 3.
 - After each wave, time freezes and a **vending machine** drops from the sky. Each player picks 1 of 3 upgrade cards.
 
+### Learning Mode (for young pilots)
+
+Each player can turn on **Learning Mode** on the title screen (up/down on their slot):
+
+| Level | For | Puzzles |
+|---|---|---|
+| Counting | ages 4–6 | count objects, which group has more, what number comes next, add within 5 |
+| Maths to 10 | age 6 | add and take away within 10 with pictures, missing number, doubles |
+| Maths to 20 | ages 7–8 | add and take away within 20, missing addend, counting in 2s and 5s, patterns |
+
+Shapes and pattern puzzles are mixed in at every level. With Learning Mode on, that player's **card picks and tower upgrades activate by solving a puzzle**. Time freezes while they think, and there are big numbers, pictures to count and three answer bubbles. A wrong answer only brings a gentle "try again" and a counting hint. Correct answers earn **math stars** and +5 seeds. Learning Mode is set per player, so a parent and child can play co-op with it on for just one of them.
+
+**KID MODE** (P1 toggles it on the title screen with the vent button) gives a tougher Silo, slower and weaker rats, and more starting seeds.
+
 ### Controls
 
 | Action | Keyboard + Mouse (P1) | Keyboard, right side (P2) | Gamepad |
@@ -41,7 +56,8 @@ godot --path .
 | Move | WASD | Arrow keys | Left stick / D-pad |
 | Aim | Mouse | Auto-aim | Right stick (auto-aim when idle) |
 | Fire | Left mouse | `/` or Numpad 0 | RT |
-| Alt (Fist / Dash) | Right mouse or Space | `.` | LT |
+| Alt (Fist / Dash) | Right mouse or V | `.` | LT |
+| Jetpack jump (with the card) | Space | `,` | L3 |
 | Sprint | Shift | `'` or Numpad Enter | LB |
 | Bank / Cram | E | `;` | A |
 | Build / Upgrade | F | L | Y |

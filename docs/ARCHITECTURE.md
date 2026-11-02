@@ -24,13 +24,20 @@ Godot 4.3+, GDScript, GL Compatibility renderer. Base viewport 640x360, `canvas_
 
 ## Arena systems (`scripts/arena`, `scripts/systems`)
 
-- `ArenaMap` — 40x22 cell grid, pads, burrows, obstacles; Dijkstra **flow field** to the Silo (`flow_waypoint(pos)`, `dist_at(pos)`).
+- `ArenaMap` — 40x22 cell grid from an ASCII `TERRAIN` layout (plateaus `H`, cliff faces `F`, ramps/stairs `r`, lanes `,`), pads, burrows, obstacles. Elevation + connected regions (`elev_at`, `same_level`, `is_high_ground`, `passable`). Dijkstra **flow field** to the Silo that never crosses cliffs and treats ramps as expensive (`flow_waypoint(pos)`, `dist_at(pos)`).
+- `TerrainArt` — composes each cell's ¾-view tile from its neighbours (lit plateau rims, cliff strata with end caps, ramps/stairs, cast shadows); `MainArena` dedupes them into one `TileMapLayer` atlas. Cliff faces and plateau edges get colliders on `L_RAT_BLOCK | L_CLIFF`; a jetpacking mech drops `L_CLIFF` from its mask mid-hop.
 - `MainArena` — enemy registry + 32px **spatial hash** (`enemies_in_radius`, `nearest_enemy`), tower building (`try_build`, `try_upgrade`, `free_pad_near`, `tower_near`, `taunting_decoy`), phase loop, co-op synergies, pause/game over.
 - `ShotManager` — every projectile as plain data; `fire(pos, vel, dmg, opts)` and `lob(from, to, dur, height, kind, on_land, opts)`. Team 0 hits rats, team 1 hits mechs/towers/Silo.
 - `SeedManager` — dropped seeds that pop, bounce and get vacuumed into cheek pouches.
 - `HazardManager` — shell piles (slow), fire (burn rats), gas (hurt mechs, corrode towers), cosmetic decals.
 - `FxManager` — batched pixel particles, muzzle flashes, rings, lightning bolts, beams, floating text.
 - `WaveSpawner` — scaling rosters, burrow telegraphs, pack spawning.
+
+## Learning Mode
+
+- `GameManager.learning_levels[player_slot]` (0 off .. 3), `GameManager.learning_level(player)`, `math_stars`, `math_asked`, `difficulty` (`"normal"`/`"kid"`).
+- `MathQuestions.make(level, rng)` returns `{type, prompt, answer, choices[3], visual, hint}`.
+- `MathQuiz` (Control on `MainArena/QuizLayer`, exposed as `arena.math_quiz`): `ask(player, level, reason)`, `signal solved(player, first_try)`. Used by `CardDraftUI` (card activation) and `MainArena.try_upgrade` (tower upgrades; the tree is paused while asking).
 
 ## Stats & cards
 

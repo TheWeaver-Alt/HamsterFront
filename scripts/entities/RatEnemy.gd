@@ -211,8 +211,10 @@ func _speed() -> float:
 	return s
 
 
-func _valid(t: Node2D) -> bool:
-	return t != null and is_instance_valid(t) and t.is_alive()
+## Untyped on purpose: a freed tower passed to a typed Node2D parameter would
+## fail the argument type check before is_instance_valid() could run.
+func _valid(t) -> bool:
+	return is_instance_valid(t) and t.is_alive()
 
 
 # --- Walker behaviour (everything but the Roomba) --------------------------------

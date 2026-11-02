@@ -105,7 +105,7 @@ func _ready() -> void:
 	wheel.mech = self
 	wheel.vented.connect(_on_vented)
 	wheel.spun_out.connect(_on_spun_out)
-	weapon.position = Vector2(0, -9) if chassis == "brawler" else Vector2(0, -25)
+	weapon.position = Vector2(0, -9) if chassis == "brawler" else Vector2(0, -28)
 	_visual_base = visual.position
 	_weapon_base = weapon.position
 	collision_layer = GameManager.L_PLAYERS
@@ -213,7 +213,8 @@ func _physics_process(delta: float) -> void:
 					start_hop(move)
 					break
 	visual.position = _visual_base - Vector2(0, hop_z)
-	weapon.position = _weapon_base - Vector2(0, hop_z)
+	# brawler arms hang off the front of the machine (keeps the detailed body visible)
+	weapon.position = _weapon_base + Vector2((5.0 if chassis == "brawler" else 0.0) * facing, -hop_z)
 	# --- aim
 	if input.aim_explicit:
 		aim_dir = input.aim
@@ -576,20 +577,35 @@ func _on_spun_out() -> void:
 # ------------------------------------------------------------------ draw
 
 func _draw() -> void:
-	# ground shadow (shrinks while jetpacking)
-	var w := (18.0 if chassis == "brawler" else 22.0) * (1.0 - hop_z / (HOP_HEIGHT * 2.0))
-	draw_rect(Rect2(-w / 2.0, -2, w, 3), Color(0, 0, 0, 0.28))
-	draw_rect(Rect2(-w / 2.0 + 2, -3, w - 4, 1), Color(0, 0, 0, 0.18))
+	# soft two-tone ground shadow (shrinks while jetpacking)
+	var shrink := 1.0 - hop_z / (HOP_HEIGHT * 2.0)
+	var rx := (10.0 if chassis == "brawler" else 12.0) * shrink
+	for dy in range(-2, 3):
+		var hw := roundf(rx * sqrt(maxf(0.0, 1.0 - pow(dy / 2.6, 2.0))))
+		if hw <= 0.0:
+			continue
+		draw_rect(Rect2(-hw, dy - 1, hw * 2.0, 1), Color(0.05, 0.03, 0.08, 0.3 if absi(dy) <= 1 else 0.16))
 
 
 func _draw_overlay() -> void:
 	var col := color()
-	var tag := "P%d" % player_id
 	var top := -44.0
+	var t := Time.get_ticks_msec() * 0.001
+	var dark := Color(0.1, 0.06, 0.12, 0.82)
 	if downed:
-		PixelArt.draw_text_centered(overlay, Vector2(0, top), "DOWN!", Color8(255, 90, 60))
-		if revive_progress > 0.0:
-			PixelArt.draw_bar(overlay, Rect2(-10, top + 8, 20, 2), revive_progress, PixelArt.C["Z"])
+		var blink := int(t * 4.0) % 2 == 0
+		PixelArt.draw_text_centered(overlay, Vector2(0, top), "DOWN!", Color8(255, 90, 60) if blink else Color8(160, 50, 40))
+		var auto_time := 8.0 if GameManager.living_players().is_empty() or not GameManager.is_coop() else 16.0
+		var rem := maxi(0, int(ceil(auto_time - down_t)))
+		PixelArt.draw_text_centered(overlay, Vector2(0, top + 8), "REBOOT %d" % rem, Color8(160, 152, 140))
+		# revive progress ring around the wreck
+		var n := 36
+		for i in n:
+			var a := -PI / 2.0 + TAU * i / n
+			var p := (Vector2(0, -12) + Vector2(cos(a) * 13.0, sin(a) * 9.0)).round()
+			var lit := float(i) / n < revive_progress
+			if lit or revive_progress > 0.0:
+				overlay.draw_rect(Rect2(p, Vector2(1, 1)), PixelArt.C["Z"] if lit else Color(0.3, 0.3, 0.35, 0.6))
 		return
 	# build ghost + range preview
 	if preview_pad != Vector2i(-1, -1):
@@ -602,21 +618,41 @@ func _draw_overlay() -> void:
 		var at2: Vector2 = preview_tower.global_position - global_position
 		var lvl: int = mini(preview_tower.level + 1, GameManager.MAX_TOWER_LEVEL)
 		TowerBase.draw_range_preview(overlay, preview_tower.kind, at2, lvl, preview_tower.global_position)
-	# player tag
-	PixelArt.draw_text_centered(overlay, Vector2(0, top + 2), tag, col)
-	# context prompt on a dark plate
+	var lift := -hop_z
+	# player tag: little plate + pointer, gently bobbing
+	var bob := roundf(sin(t * 3.0 + player_id))
+	var ty := top + 1.0 + bob + lift
+	PixelArt.draw_box(overlay, Rect2(-6, ty, 12, 8), dark, col.darkened(0.25))
+	PixelArt.draw_text_centered(overlay, Vector2(0, ty + 2), "P%d" % player_id, col, false)
+	overlay.draw_rect(Rect2(-1, ty + 8, 3, 1), col)
+	overlay.draw_rect(Rect2(0, ty + 9, 1, 1), col)
+	# status chips beside the tag
+	if wheel.is_redline() and int(t * 6.0) % 2 == 0:
+		PixelArt.draw_text(overlay, Vector2(8, ty + 2), "HOT!", Color8(255, 64, 40))
+	if pouch.is_full():
+		overlay.draw_texture(PixelArt.tex("seed_icon"), Vector2(-15, ty + roundf(sin(t * 6.0))))
+	# context prompt on a bordered plate; the button glyph glows in the pilot's colour
 	if context != "":
-		var c := Color8(255, 248, 231) if context_ok else Color8(160, 152, 140)
 		var tw := PixelArt.text_width(context)
-		overlay.draw_rect(Rect2(-tw / 2 - 2, top - 9, tw + 3, 8), Color(0.1, 0.06, 0.12, 0.75))
-		PixelArt.draw_text(overlay, Vector2(-tw / 2, top - 8), context, c)
-	if wheel.is_redline() and int(Time.get_ticks_msec() / 150) % 2 == 0:
-		PixelArt.draw_text_centered(overlay, Vector2(10, top + 2), "!!", Color8(255, 64, 40))
-	# mouse reticle for the keyboard+mouse pilot
+		var px0 := float(-tw / 2)
+		var py := top - 10.0 + lift
+		PixelArt.draw_box(overlay, Rect2(px0 - 3, py - 1, tw + 6, 9), dark, col.darkened(0.45) if context_ok else Color8(84, 70, 98))
+		var dim := Color8(255, 248, 231) if context_ok else Color8(160, 152, 140)
+		var close := context.find("]")
+		if context.begins_with("[") and close > 0:
+			var glyph := context.substr(0, close + 1)
+			PixelArt.draw_text(overlay, Vector2(px0, py + 1), glyph, col.lightened(0.25) if context_ok else dim)
+			PixelArt.draw_text(overlay, Vector2(px0 + PixelArt.text_width(glyph), py + 1), context.substr(close + 1), dim)
+		else:
+			PixelArt.draw_text(overlay, Vector2(px0, py + 1), context, dim)
+	# mouse reticle for the keyboard+mouse pilot (kicks open when firing)
 	if input != null and input.device == "kbm":
-		var m := get_global_mouse_position() - global_position
-		m = m.round()
-		overlay.draw_rect(Rect2(m + Vector2(-4, 0), Vector2(3, 1)), col)
-		overlay.draw_rect(Rect2(m + Vector2(2, 0), Vector2(3, 1)), col)
-		overlay.draw_rect(Rect2(m + Vector2(0, -4), Vector2(1, 3)), col)
-		overlay.draw_rect(Rect2(m + Vector2(0, 2), Vector2(1, 3)), col)
+		var m := (get_global_mouse_position() - global_position).round()
+		var gap := 3.0 + roundf(weapon.recoil * 1.2)
+		var arms := [Vector2(-gap - 2, 0), Vector2(gap, 0), Vector2(0, -gap - 2), Vector2(0, gap)]
+		var sizes := [Vector2(3, 1), Vector2(3, 1), Vector2(1, 3), Vector2(1, 3)]
+		for i in 4:
+			var r := Rect2(m + (arms[i] as Vector2), sizes[i])
+			overlay.draw_rect(Rect2(r.position + Vector2(1, 1), r.size), Color(0.1, 0.06, 0.12, 0.7))
+			overlay.draw_rect(r, col)
+		overlay.draw_rect(Rect2(m, Vector2(1, 1)), col.lightened(0.4))

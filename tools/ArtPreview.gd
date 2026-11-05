@@ -29,7 +29,7 @@ const SPRITES := [
 	"tesla_intern_2", "tesla_intern_3", "tower_decoy_1", "tower_decoy_2", "tower_decoy_3", "tower_decoy_1_d1",
 	"tower_decoy_3_d2", "tower_debris_0", "tower_debris_1", "tower_debris_2", "tower_debris_3",
 	"tower_rubble", "shell",
-	"seed", "seed_h", "seed_icon", "silo_bucket", "obstacle_pot", "obstacle_rock", "obstacle_gnome", "obstacle_can",
+	"seed", "seed_h", "seed_icon", "silo_1", "silo_2", "silo_3", "silo_4", "obstacle_pot", "obstacle_rock", "obstacle_gnome", "obstacle_can",
 	"icon_heart", "icon_heat", "icon_skull",
 	"tile_grass_0", "tile_grass_1", "tile_grass_2", "tile_grass_3", "tile_flowers_0", "tile_flowers_1",
 	"tile_path_0", "tile_path_1", "tile_path_2", "tile_pad", "tile_burrow", "tile_fence", "tile_dirt",

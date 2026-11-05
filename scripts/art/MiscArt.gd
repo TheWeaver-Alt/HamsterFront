@@ -3,7 +3,7 @@ extends RefCounted
 ## Names:
 ##   seed, seed_h          striped sunflower seed pickup (vertical / horizontal)
 ##   seed_icon             HUD seed icon
-##   silo_bucket           The Great Silo plastic bucket (seed mound is drawn live)
+##   silo_1..silo_4        The Great Silo at each upgrade level (the seed-level window is filled live)
 ##   obstacle_pot, obstacle_rock, obstacle_gnome, obstacle_can
 ##   icon_heart, icon_heat, icon_skull, icon_wave
 ## Ambient life (drawn by scripts/systems/AmbientLayer.gd), lean = l | c | r:
@@ -21,8 +21,6 @@ static func make(n: String) -> Image:
 			return seed_h()
 		"seed_icon":
 			return seed_icon()
-		"silo_bucket":
-			return silo_bucket()
 		"obstacle_pot":
 			return pot()
 		"obstacle_rock":
@@ -37,6 +35,8 @@ static func make(n: String) -> Image:
 			return PA.from_ascii(["..i..", ".iI..", ".iIi.", "iIIIi", ".iii."], 1)
 		"icon_skull":
 			return PA.from_ascii([".www.", "wwwww", "wkwkw", "wwwww", ".w.w."], 1)
+	if n.begins_with("silo_"):
+		return silo(int(n.substr(5)))
 	if n.begins_with("amb_"):
 		return _ambient(n.substr(4))
 	return null
@@ -63,80 +63,135 @@ static func seed_icon() -> Image:
 	return PA.outline(img, PA.col("w"))
 
 
-static func silo_bucket() -> Image:
-	# Glossy blue plastic bucket: thick rolled rim, moulded rings, gloss stripe, handle lugs,
-	# and a SEEDS sticker with a sunflower logo. Footprint 56x44, base at the bottom row.
-	var w := 56
-	var h := 44
-	var img := PA.new_img(w, h)
-	var blue := PA.col("A")
-	var blue_lt := PA.col("a")
-	var blue_dk := PA.col("n")
-	var top_w := 49.0
-	var bot_w := 39.0
-	for y in range(5, h - 1):
-		var t := float(y - 5) / float(h - 6)
-		var row_w := lerpf(top_w, bot_w, t)
-		var x0 := int(roundf(w / 2.0 - row_w / 2.0))
-		var x1 := int(roundf(w / 2.0 + row_w / 2.0))
-		for x in range(x0, x1):
-			var u := float(x - x0) / maxf(1.0, float(x1 - x0 - 1))   # 0 left .. 1 right
-			var c := blue
-			if u < 0.07:
-				c = blue_lt.darkened(0.05)
-			elif u < 0.13:
-				c = blue.lightened(0.18)
-			elif u > 0.9:
-				c = blue_dk
-			elif u > 0.78:
-				c = blue.darkened(0.18)
-			# vertical gloss stripe
-			if u > 0.24 and u < 0.29:
-				c = PA.col("w").lerp(blue_lt, 0.35)
-			elif u >= 0.29 and u < 0.31:
-				c = blue_lt
-			img.set_pixel(x, y, c)
-		# moulded rings
-		if y == 15 or y == 27 or y == 37:
-			for x in range(x0 + 1, x1 - 1):
-				img.set_pixel(x, y, img.get_pixel(x, y).darkened(0.2))
-				PA.px(img, x, y + 1, img.get_pixel(x, y + 1).lightened(0.12))
-	# rolled rim (a little wider than the body)
-	for x in range(2, w - 2):
-		var u2 := float(x - 2) / float(w - 5)
-		PA.px(img, x, 1, blue_lt.lightened(0.25) if u2 < 0.7 else blue_lt)
-		PA.px(img, x, 2, blue_lt)
-		PA.px(img, x, 3, blue if u2 < 0.8 else blue.darkened(0.15))
-		PA.px(img, x, 4, blue_dk)
-	PA.px(img, 1, 2, blue_lt)
-	PA.px(img, 1, 3, blue)
-	PA.px(img, w - 2, 2, blue)
-	PA.px(img, w - 2, 3, blue_dk)
-	# handle lugs
-	for side in [3, w - 6]:
-		PA.rect(img, side, 5, 3, 3, PA.col("g"))
-		PA.px(img, side + 1, 5, PA.col("W"))
-		PA.px(img, side + 1, 6, PA.col("G"))
-	# sticker: white border, red label, SEEDS text and a little sunflower
-	PA.rect(img, 13, 16, 30, 13, PA.col("w"))
-	PA.rect(img, 14, 17, 28, 11, PA.col("r"))
-	PA.rect(img, 14, 17, 28, 1, PA.col("r").lightened(0.3))
-	PA.rect(img, 14, 27, 28, 1, PA.col("R"))
-	PA.stamp_text(img, 22, 19, "SEEDS", PA.col("w"))
-	PA.disk(img, 18.0, 22.0, 2.6, PA.col("y"))
-	PA.disk(img, 18.0, 22.0, 1.2, PA.col("B"))
-	PA.px(img, 18, 25, PA.col("E"))
-	PA.px(img, 18, 26, PA.col("E"))
-	# base: dark foot + floor contact
-	for x in range(9, w - 9):
-		PA.px(img, x, h - 2, blue_dk.darkened(0.2))
-	# scuffs
-	PA.px(img, 9, 34, blue_dk)
-	PA.px(img, 10, 35, blue_dk)
-	PA.px(img, 44, 11, blue_dk)
-	PA.px(img, 45, 31, blue.darkened(0.25))
-	return PA.outline(img)
+const SILO_W := 56
 
+
+## Height of the Silo sprite at each upgrade level (it stands taller as capacity grows).
+static func silo_height(level: int) -> int:
+	var lv := clampi(level, 1, 4)
+	return 58 + 6 * (lv - 1) + (8 if lv == 4 else 0)
+
+
+## y of the roof's apex (level 4 leaves room above it for the sunflower weathervane).
+static func _silo_top(level: int) -> int:
+	return 10 if level >= 4 else 2
+
+
+## y where the straight steel wall starts, just under the roof rim.
+static func silo_body_top(level: int) -> int:
+	return _silo_top(clampi(level, 1, 4)) + 13
+
+
+## The seed-level window's inside, in texture pixels. The art leaves it empty and Silo.gd paints the live fill.
+static func silo_gauge(level: int) -> Rect2i:
+	var lv := clampi(level, 1, 4)
+	var y0 := _silo_top(lv) + 19
+	return Rect2i(32, y0, 6, (silo_height(lv) - 14) - y0)
+
+
+static func silo(level: int) -> Image:
+	# Corrugated grain silo lit from the left: red roof with a vent cap, seams, a sunflower plaque and a
+	# seed-level window with ticks at 25/50/75%. Upgrades add height and trim: yellow rim (2), lamps and
+	# a chimney (3), a golden roof with a sunflower weathervane (4).
+	var lv := clampi(level, 1, 4)
+	var w := SILO_W
+	var h := silo_height(lv)
+	var img := PA.new_img(w, h)
+	var top := _silo_top(lv)
+	var body_top := silo_body_top(lv)
+	var bot := h - 4
+	var x0 := 10
+	var x1 := 46
+	var cx := 28.0
+	# wall: vertical corrugation, highlight on the left, shadow on the right, elliptical foot
+	for x in range(x0, x1):
+		var u := float(x - x0) / float(x1 - x0 - 1)
+		var c := PA.col("W").darkened(0.12)
+		if u < 0.1:
+			c = PA.col("w")
+		elif u < 0.4:
+			c = PA.col("W")
+		elif u > 0.84:
+			c = PA.col("G")
+		elif u > 0.62:
+			c = PA.col("g")
+		if x % 3 == 0:
+			c = c.darkened(0.1)
+		var dx := (float(x) - cx + 0.5) / 18.0
+		var y_end := bot + int(roundf(3.0 * sqrt(maxf(0.0, 1.0 - dx * dx))))
+		for y in range(body_top, y_end):
+			img.set_pixel(x, y, c)
+	# seams every 14 px, counted up from the foot
+	var seam := bot - 14
+	while seam > body_top + 5:
+		for x in range(x0, x1):
+			img.set_pixel(x, seam, img.get_pixel(x, seam).darkened(0.25))
+			img.set_pixel(x, seam + 1, img.get_pixel(x, seam + 1).lightened(0.12))
+		seam -= 14
+	# concrete foot following the curve
+	for x in range(x0, x1):
+		var dxf := (float(x) - cx + 0.5) / 18.0
+		var ye := bot + int(roundf(3.0 * sqrt(maxf(0.0, 1.0 - dxf * dxf))))
+		PA.px(img, x, ye - 2, PA.col("h"))
+		PA.px(img, x, ye - 1, PA.col("H"))
+	# sunflower plaque
+	var py := float(top + 27)
+	PA.disk(img, 21.0, py, 6.0, PA.col("w"))
+	PA.disk(img, 21.0, py, 5.0, PA.col("r"))
+	PA.disk(img, 21.0, py, 3.2, PA.col("y"))
+	PA.disk(img, 21.0, py, 1.6, PA.col("B"))
+	# seed-level window: frame, empty inside, ticks outside the frame
+	var g := silo_gauge(lv)
+	PA.rect(img, g.position.x - 1, g.position.y - 1, g.size.x + 2, g.size.y + 2, PA.col("G"))
+	PA.rect(img, g.position.x - 1, g.position.y - 1, g.size.x + 2, 1, PA.col("g"))
+	PA.rect(img, g.position.x - 1, g.position.y - 1, 1, g.size.y + 2, PA.col("g"))
+	PA.rect(img, g.position.x, g.position.y, g.size.x, g.size.y, PA.col("k"))
+	for i in range(1, 4):
+		var ty := g.end.y - int(roundf(g.size.y * i / 4.0))
+		PA.rect(img, g.end.x + 1, ty, 2, 1, PA.col("w") if i == 2 else PA.col("W"))
+	# roof: a cone with ribs, shaded like the wall
+	var roof := PA.col("y") if lv >= 4 else PA.col("r")
+	var roof_dk := PA.col("Y") if lv >= 4 else PA.col("R")
+	for y in range(top, top + 13):
+		var t := float(y - top) / 12.0
+		var hw := 2.0 + t * 20.0
+		var xa := int(roundf(cx - hw))
+		var xb := int(roundf(cx + hw))
+		for x in range(xa, xb):
+			var u := float(x - xa) / maxf(1.0, float(xb - xa - 1))
+			var c := roof
+			if u < 0.18:
+				c = roof.lightened(0.3)
+			elif u < 0.4:
+				c = roof.lightened(0.12)
+			elif u > 0.8:
+				c = roof_dk
+			elif u > 0.6:
+				c = roof.darkened(0.12)
+			if (x - int(cx)) % 5 == 0:
+				c = c.darkened(0.15)
+			img.set_pixel(x, y, c)
+	# rim, with a shadow cast on the wall below it
+	var trim := PA.col("R") if lv == 1 else (PA.col("r") if lv >= 4 else PA.col("y"))
+	for x in range(6, 50):
+		PA.px(img, x, top + 12, trim)
+		PA.px(img, x, top + 13, trim.darkened(0.25))
+	for x in range(x0, x1):
+		img.set_pixel(x, top + 14, img.get_pixel(x, top + 14).darkened(0.3))
+	# vent cap
+	PA.rect(img, 27, top - 1, 3, 2, PA.col("g"))
+	PA.px(img, 28, top - 1, PA.col("W"))
+	if lv >= 2:
+		for lx in [12, 28, 43]:
+			PA.px(img, lx, top + 12, PA.col("I"))
+	if lv >= 3:
+		PA.rect(img, 36, top + 5, 3, 4, PA.col("G"))
+		PA.rect(img, 36, top + 5, 3, 1, PA.col("g"))
+	if lv >= 4:
+		PA.rect(img, 28, top - 6, 1, 6, PA.col("G"))
+		PA.disk(img, 28.0, float(top - 7), 2.6, PA.col("y"))
+		PA.disk(img, 28.0, float(top - 7), 1.2, PA.col("B"))
+	return PA.outline(img, PA.col("k"))
 
 static func pot() -> Image:
 	var img := PA.new_img(18, 23)

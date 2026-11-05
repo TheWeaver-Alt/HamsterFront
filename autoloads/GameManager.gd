@@ -7,6 +7,7 @@ signal wave_changed(wave: int)
 signal phase_changed(phase: String)
 signal announce(text: String, sub: String, color: Color)
 signal game_over_triggered
+signal silo_upgraded(level: int)
 
 const TILE := 16
 const MAP_W := 40
@@ -35,6 +36,10 @@ const TOWER_INFO := {
 }
 const MAX_TOWER_LEVEL := 3
 
+## The Silo's seed store (ADR-0002): capacity per Silo level, and the seeds it costs to reach each level.
+const SILO_CAPACITY := [150, 250, 400, 600]
+const SILO_UPGRADE_COST := [0, 60, 120, 200]
+
 # --- persistent between runs (title screen settings)
 var num_players: int = 1
 var player_devices: Array = ["kbm", "pad0"]
@@ -50,7 +55,9 @@ const LEARNING_NAMES := ["OFF", "COUNTING", "MATHS TO 10", "MATHS TO 20"]
 var wave: int = 0
 var silo_hp: float = 1500.0
 var silo_max_hp: float = 1500.0
-var seeds: int = 0
+var seeds: int = 0                   # what the Silo's store holds: the universal currency
+var silo_level: int = 1
+var silo_capacity: int = 150
 var phase: String = "title"          # title | build | wave | draft | gameover
 var run_active: bool = false
 var kills: int = 0
@@ -115,6 +122,8 @@ func new_run() -> void:
 	silo_max_hp = 2200.0 if difficulty == "kid" else 1500.0
 	silo_hp = silo_max_hp
 	seeds = 130 if difficulty == "kid" else 90
+	silo_level = 1
+	silo_capacity = SILO_CAPACITY[0]
 	math_stars = 0
 	math_asked = 0
 	kills = 0
@@ -170,11 +179,24 @@ func tower_cost(kind: String, level: int = 1) -> int:
 	return maxi(1, int(roundf(base * 0.75 * (level - 1) * mult)))
 
 
-func add_seeds(n: int) -> void:
-	seeds += n
-	if n > 0:
-		seeds_banked_total += n
+## Room left in the Silo's store.
+func store_space() -> int:
+	return maxi(0, silo_capacity - seeds)
+
+
+func store_fill() -> float:
+	return clampf(float(seeds) / float(maxi(1, silo_capacity)), 0.0, 1.0)
+
+
+## Puts up to n seeds into the store; returns how many fit. The rest is not added.
+func add_seeds(n: int) -> int:
+	var added := mini(n, store_space())
+	if added <= 0:
+		return 0
+	seeds += added
+	seeds_banked_total += added
 	seeds_changed.emit(seeds)
+	return added
 
 
 func can_afford(n: int) -> bool:
@@ -190,6 +212,25 @@ func spend(n: int) -> bool:
 
 
 # ------------------------------------------------------------------ silo
+
+func silo_maxed() -> bool:
+	return silo_level >= SILO_CAPACITY.size()
+
+
+## Seeds the next Silo level costs, or 0 when it is already at the top.
+func silo_upgrade_cost() -> int:
+	return 0 if silo_maxed() else int(SILO_UPGRADE_COST[silo_level])
+
+
+## Spends the seeds and raises the store's capacity. Returns false when maxed or too poor.
+func upgrade_silo() -> bool:
+	if silo_maxed() or not spend(silo_upgrade_cost()):
+		return false
+	silo_level += 1
+	silo_capacity = int(SILO_CAPACITY[silo_level - 1])
+	silo_upgraded.emit(silo_level)
+	return true
+
 
 func damage_silo(amount: float) -> void:
 	if phase == "gameover" or not run_active:

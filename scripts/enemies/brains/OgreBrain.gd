@@ -12,7 +12,7 @@ const THROW_MIN := 40.0
 const THROW_MAX := 170.0
 const FOE_RANGE := 140.0
 
-const BARKS := ["OGRE SMASH-CRUSH!", "Tiny-fluff go SPLAT!", "Bucket-seeds for OGRE!", "Ogre not stitched-made for losing!"]
+const BARKS := ["OGRE SMASH-CRUSH!", "Tiny-fluff go SPLAT!", "Silo-seeds for OGRE!", "Ogre not stitched-made for losing!"]
 const SLAM_BARKS := ["SMAAASH!", "FLAT-FLAT!"]
 const THROW_BARKS := ["Fly-fly, little squeaker!", "YEET-THROW!", "Catch-catch, fur-thing!"]
 const LANDED_BARKS := ["Wheee-crunch! Again-again!", "Not me-me, you blind-fool!", "Ow-ow-ow... charge-charge!"]

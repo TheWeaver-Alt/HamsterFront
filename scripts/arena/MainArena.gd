@@ -415,21 +415,10 @@ func try_upgrade(player, t) -> bool:
 		fx.float_text(t.global_position + Vector2(0, -16), "NEED %d SEEDS" % cost, PixelArt.C["r"], 0.9, 8.0)
 		return false
 	# Learning Mode: solve a puzzle to activate the upgrade (time freezes meanwhile)
-	var lvl := GameManager.learning_level(player)
-	if lvl > 0 and math_quiz != null:
-		if math_quiz.active or get_tree().paused:
-			return false
-		get_tree().paused = true
-		var info: Dictionary = GameManager.TOWER_INFO[t.kind]
-		math_quiz.ask(player, lvl, "UPGRADE %s TO LV%d" % [info["short"], t.level + 1])
-		while true:
-			var res: Array = await math_quiz.solved
-			if res.size() > 0 and res[0] == player:
-				break
-		if GameManager.phase != "gameover" and not pause_menu.visible:
-			get_tree().paused = false
-		if is_instance_valid(player):
-			player.input.consume()
+	var info: Dictionary = GameManager.TOWER_INFO[t.kind]
+	if not await _solve_gate(player, "UPGRADE %s TO LV%d" % [info["short"], t.level + 1]):
+		return false
+	if GameManager.learning_level(player) > 0:
 		if not is_instance_valid(t) or not t.alive or t.level >= GameManager.MAX_TOWER_LEVEL:
 			return false
 		cost = GameManager.tower_cost(t.kind, t.level + 1)
@@ -438,6 +427,50 @@ func try_upgrade(player, t) -> bool:
 		return false
 	t.upgrade()
 	Sfx.play("upgrade")
+	return true
+
+
+## Learning Mode gate: freezes time until this player solves a puzzle. Returns false when another
+## quiz or the pause menu is already up. Without Learning Mode it returns true at once.
+func _solve_gate(player, reason: String) -> bool:
+	var lvl := GameManager.learning_level(player)
+	if lvl <= 0 or math_quiz == null:
+		return true
+	if math_quiz.active or get_tree().paused:
+		return false
+	get_tree().paused = true
+	math_quiz.ask(player, lvl, reason)
+	while true:
+		var res: Array = await math_quiz.solved
+		if res.size() > 0 and res[0] == player:
+			break
+	if GameManager.phase != "gameover" and not pause_menu.visible:
+		get_tree().paused = false
+	if is_instance_valid(player):
+		player.input.consume()
+	return true
+
+
+## Spends seeds to raise the Silo's store capacity (ADR-0002).
+func try_upgrade_silo(player) -> bool:
+	if GameManager.silo_maxed():
+		Sfx.play("deny", 1.0, -6.0)
+		return false
+	var cost := GameManager.silo_upgrade_cost()
+	if not GameManager.can_afford(cost):
+		Sfx.play("deny")
+		fx.float_text(ArenaMap.SILO_CENTER + Vector2(0, -48), "NEED %d SEEDS" % cost, PixelArt.C["r"], 0.9, 8.0)
+		return false
+	if not await _solve_gate(player, "UPGRADE SILO TO LV%d" % (GameManager.silo_level + 1)):
+		return false
+	var before := GameManager.silo_capacity
+	if GameManager.phase == "gameover" or not GameManager.upgrade_silo():
+		Sfx.play("deny")
+		return false
+	silo_node.upgraded()
+	Sfx.play("upgrade")
+	JuiceManager.add_trauma(0.2)
+	GameManager.say("SILO LV%d" % GameManager.silo_level, "+%d SEED CAPACITY" % (GameManager.silo_capacity - before), Color8(255, 214, 64))
 	return true
 
 
@@ -573,8 +606,11 @@ func _start_wave() -> void:
 func _wave_cleared() -> void:
 	Sfx.play("wave_clear")
 	var bonus := 20 + GameManager.wave * 6
-	GameManager.add_seeds(bonus)
-	fx.float_text(ArenaMap.SILO_CENTER + Vector2(0, -48), "+%d WAVE BONUS" % bonus, PixelArt.C["y"], 1.6, 18.0)
+	var got := GameManager.add_seeds(bonus)
+	var bonus_text := "+%d WAVE BONUS" % got
+	if got < bonus:
+		bonus_text += " (SILO FULL)"
+	fx.float_text(ArenaMap.SILO_CENTER + Vector2(0, -48), bonus_text, PixelArt.C["y"], 1.6, 18.0)
 	GameManager.say("WAVE %d CLEARED!" % GameManager.wave, "THE VENDING MACHINE APPROACHES", Color8(255, 214, 64))
 	var repair := GameManager.gstats.g("tower_wave_repair", 0.0)
 	for t in towers:

@@ -10,7 +10,7 @@ Godot 4.3+, GDScript, GL Compatibility renderer. Base viewport 640x360, `canvas_
 |---|---|
 | `PixelArt` | Palette `C`, raster helpers (`disk`, `rect`, `line`, `outline`, `from_ascii`, `stamp_text`), named-texture cache `tex(name)`, the pixel `font`, canvas helpers `draw_text*`, `draw_bar`, `draw_box`, `draw_disk`, `make_flash_material()` |
 | `Sfx` | Procedural 8-bit sounds. `Sfx.play(name, pitch, db)`, `Sfx.play_var(name, pitch, variance, db)` |
-| `GameManager` | Wave, Silo HP, banked seeds, phase (`title/build/wave/draft/gameover`), player devices, global `gstats` (`StatBlock`), `TOWER_INFO`, `arena` + `players` refs |
+| `GameManager` | Wave, Silo HP, the Silo's seed store (`seeds`, `silo_level`, `silo_capacity`; see Economy), phase (`title/build/wave/draft/gameover`), player devices, global `gstats` (`StatBlock`), `TOWER_INFO`, `arena` + `players` refs |
 | `CardDB` | All upgrade cards, weighted `roll_hand()`, `apply_card()` |
 | `JuiceManager` | Hit-stop (`Engine.time_scale`), camera trauma shake, pooled speech-bubble `bark()`s, screen flash |
 
@@ -43,6 +43,16 @@ Godot 4.3+, GDScript, GL Compatibility renderer. Base viewport 640x360, `canvas_
 
 `StatBlock`: `final = (base + Σadd) × Πmul`, plus flags. Each mech has `stats`; the team/towers share `GameManager.gstats`. A card's `mods` go to the picking player, `gmods` to `gstats`. See the header of `autoloads/CardDB.gd` for every key.
 
+## Economy (ADR-0002)
+
+Seeds are the one currency: towers, tower upgrades and Silo upgrades. They live in the Silo's store, which has a capacity. The Silo's structure HP is separate and is what ends the run.
+
+- `GameManager`: `seeds` (the store's content), `silo_level` 1..4, `silo_capacity`, `SILO_CAPACITY` [150, 250, 400, 600], `SILO_UPGRADE_COST` [0, 60, 120, 200], `store_space()`, `store_fill()`, `add_seeds(n)` (returns how many fit), `spend(n)`, `silo_upgrade_cost()`, `upgrade_silo()`, signal `silo_upgraded`.
+- Banking: `MechPlayer._bank_seeds(n)` moves only what fits, so a full store leaves the rest in the cheeks. The wave bonus and the quiz reward go through `add_seeds` and are clamped too.
+- Upgrading: stand near the Silo and press build (`MainArena.try_upgrade_silo`). Learning Mode gates it with a puzzle through `MainArena._solve_gate`, which tower upgrades use as well.
+- Drawing: `MiscArt.silo(level)` paints the sprite, taller with each level, and leaves its window empty. `Silo.gd` fills the window from `MiscArt.silo_gauge(level)`, draws rat damage and the UPGRADE tag. `HUD` shows `seeds/capacity` and a fill bar.
+- Check: `tools/SmokeTest.tscn --economy` asserts the capacity, banking and upgrade rules.
+
 ## Damage interfaces
 
 - Rat: `take_damage(amount, from_pos, knockback, info)` — `info` keys: `owner`, `kind`, `burn`, `stun`, `melt`, `quiet`, `friendly`.
@@ -53,4 +63,4 @@ Godot 4.3+, GDScript, GL Compatibility renderer. Base viewport 640x360, `canvas_
 ## Dev tools (`/tools`)
 
 - `ArtPreview.tscn` — renders every sprite + font sample to `screenshots/art_preview.png`.
-- `SmokeTest.tscn` — two bot pilots play N waves: `godot --path . res://tools/SmokeTest.tscn -- --waves=4 --speed=3 [--shots] [--spawn-all] [--lob-free]`. `--lob-free` fires a mortar shell and destroys its tower mid-flight (regression for a freed lambda capture). `bash tools/check.sh` wraps import plus this run and fails on any `ERROR:` line.
+- `SmokeTest.tscn` — two bot pilots play N waves: `godot --path . res://tools/SmokeTest.tscn -- --waves=4 --speed=3 [--shots] [--spawn-all] [--lob-free] [--economy]`. `--lob-free` fires a mortar shell and destroys its tower mid-flight (regression for a freed lambda capture). `--economy` asserts the Silo store rules (see Economy). `bash tools/check.sh` wraps import plus this run and fails on any `ERROR:` line.

@@ -111,7 +111,7 @@ func _draw() -> void:
 		zc.a = 1.0 - zt
 		PixelArt.draw_text(self, zp, "Z", zc, 6 if i < 2 else 12)
 	PixelArt.draw_text_centered(self, Vector2(320, 140), "THE RATS ARE ALSO TAKING A BREATHER", PixelArt.C["g"], false)
-	PixelArt.draw_text_centered(self, Vector2(320, 150), "WAVE %d   %s   SEEDS %d" % [GameManager.wave, _fmt_time(GameManager.run_time), GameManager.seeds], PixelArt.C["W"], false)
+	PixelArt.draw_text_centered(self, Vector2(320, 150), "WAVE %d   %s   SEEDS %d/%d" % [GameManager.wave, _fmt_time(GameManager.run_time), GameManager.seeds, GameManager.silo_capacity], PixelArt.C["W"], false)
 	for i in OPTIONS.size():
 		var r := _option_rect(i)
 		var on := i == sel

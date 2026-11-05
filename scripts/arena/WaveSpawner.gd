@@ -6,7 +6,7 @@ signal wave_started(n: int)
 
 const SPAWN_BARKS := [
 	"Yes-yes! Steal-take the fat-cheek seeds!",
-	"Quick-quick! Bucket-bucket is unguarded-ish!",
+	"Quick-quick! Silo-silo is unguarded-ish!",
 	"For the Horned One! Swarm-swarm!",
 ]
 const OGRE_BARKS := ["RAAAGH! SMASH-CRUSH FLUFF-THINGS!", "OGRE HUNGRY! OGRE THROW!"]

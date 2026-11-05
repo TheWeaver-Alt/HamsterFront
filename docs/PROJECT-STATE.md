@@ -1,12 +1,13 @@
 # Project state
 
-**Stage:** playable, polishing · **Last updated:** 2026-11-02 · **Next:** Rework the Silo and seed economy (ADR-0002).
+**Stage:** playable, reworking the economy · **Last updated:** 2026-11-05 · **Next:** Merge the two finished side branches, then make the chassis data-driven and add the tank and drone.
 
 <!-- project-kit 1.0.0. This file owns status. /handoff rewrites Now and adds a session-log entry at the top. -->
 
 ## Now
 
-- A full run plays end to end: a join screen (keyboard and mouse, P2 keyboard, gamepads), the ¾-view elevated Backyard with three canyon lanes, plateaus and ramps, build and wave phases, the vending-machine card draft after each wave, and game over when the Silo empties.
+- A full run plays end to end: a join screen (keyboard and mouse, P2 keyboard, gamepads), the ¾-view elevated Backyard with three canyon lanes, plateaus and ramps, build and wave phases, the vending-machine card draft after each wave, and game over when the Silo's structure gives out.
+- The Silo is a steel grain silo with a seed-level window ([ADR-0002](adr/0002-silo-hp-and-seed-store.md)). Seeds are the one currency and live in its store, which holds 150 and can be upgraded to 250, 400 and 600 (60, 120 and 200 seeds). A full store stops banking and the rest stays in the cheeks. The HUD shows `seeds/capacity`, and an UPGRADE tag floats above the Silo when a pilot is in reach.
 - Two mechs, BRAWLER-01 and WHEELER-X: cheek pouch (bank, cram, spit), wheel heat (sprint, redline, spin-out, vent), alt attacks, and the Soda-Bottle Jetpack card for hopping cliffs.
 - The full enemy roster (Clan-Squeakers, Jezzails, Plague-Stink Monks, Doom-Roombas, the Rat-Ogre Bruiser), animated, with death animations and burrow crawl-outs.
 - Five towers with three upgrade levels, a +15% high-ground range bonus and Sugar Rush overdrive.
@@ -19,8 +20,9 @@
 
 - The polish pass (`2689be6` to `bf847bc` on `main`). Its first commit is marked "in progress". Whether more is planned is the owner's call.
 - **Owner's brief of 2026-11-02** (the kid loves the game). Build order is economy, then chassis, then cards, then the Workshop. Done means each piece is playable and `bash tools/check.sh` passes.
-  1. **Visual puzzles** (independent of the rest, so it can run in its own session; not started yet): more pattern and shape puzzles, less text, in `scripts/core/MathQuestions.gd` and `scripts/ui/MathQuiz.gd`.
-  2. **Silo and economy** ([ADR-0002](adr/0002-silo-hp-and-seed-store.md)): a real silo with a fill gauge, a seed store with capacity, seeds as the universal currency for towers and mech upgrades.
+  1. **Visual puzzles**: a separate session reported it finished, as uncommitted changes in the worktree `.claude/worktrees/visual-puzzles-6c3027` (branch `claude/visual-puzzles-6c3027`, cut before the rename). Not reviewed or merged here yet. Its notes are in `visual-puzzles-handover.md` in that worktree.
+  2. **Silo and economy** ([ADR-0002](adr/0002-silo-hp-and-seed-store.md)): built, checked and committed (2026-11-05). Still open: mech upgrades paying in seeds, which comes with the cards rework.
+  - **Mech wedged in a freshly built tower**: fixed on branch `claude/magical-satoshi-a50127` (commit `ecfe698`, with a `--stuck` regression). Not merged. It touches `tools/SmokeTest.gd`, `tools/check.sh` and `docs/ARCHITECTURE.md`, as the economy work does, so the merge needs a small conflict fix.
   3. **Four mechs**: make the chassis data-driven (today `"brawler"` and `"wheeler"` are hard-coded in about 115 places), then add the tank (artillery, reusing `ShotManager.lob`) and the drone (flies over cliffs). Weight handling becomes per chassis instead of the one global `pouch_slow`.
   4. **Simpler cards**: icon-first cards that build and upgrade the mech, bought with seeds.
   5. **Workshop**: Vampire Survivors-style upgrades per mech between runs, saved in a file. The tank and drone unlock here. Needs its own ADR for the save file before any code.
@@ -28,11 +30,13 @@
 
 ## Next
 
-1. Silo and economy per ADR-0002: `silo_capacity`, the fill gauge, the HUD, the capacity upgrade.
+1. Commit the economy work, then merge `claude/magical-satoshi-a50127` and `claude/visual-puzzles-6c3027` (the owner's call), fixing the overlaps in `tools/SmokeTest.gd`, `tools/check.sh`, `README.md` and `docs/ARCHITECTURE.md`.
 2. Make the chassis data-driven, then add the tank and drone.
 
 ## Known gaps and risks
 
+- The economy numbers (capacity 150/250/400/600, upgrade costs 60/120/200, the wave bonus clamped to the store) are a first pass. No real player has tried them yet, and the bots start with 400 seeds, so the cap barely bites in `tools/check.sh`.
+- A wave bonus that doesn't fit in the store is lost. The float text says "SILO FULL", but a child may still find it unfair. Revisit after play.
 - `tools/check.sh`'s import step doesn't parse every script. A script that only loads at runtime (the tower brains, say) is caught only if the smoke run uses it.
 - The smoke test is unseeded, so a failure can't be replayed on demand.
 - No unit tests: the bot playtest is the only automated check. Picking a test approach for GDScript needs an ADR.
@@ -56,6 +60,22 @@
 | 2026-11-02 | GitHub's default branch is `main` | owner | GitHub repo settings |
 
 ## Session log
+
+### 2026-11-05 · Silo and seed economy (ADR-0002)
+
+- `GameManager`: `silo_level`, `silo_capacity`, `store_space()`, `store_fill()`, a capped `add_seeds` that returns how many fit, `silo_upgrade_cost()` and `upgrade_silo()`. A new run starts at level 1 with 150 capacity.
+- `MechPlayer`: banking goes through `_bank_seeds`, which moves only what fits; a full store shows "SILO FULL" and leaves the seeds in the cheeks. Prompts near the Silo: bank, upgrade, or "SILO FULL! UPGRADE n".
+- `MainArena`: `try_upgrade_silo`, plus `_solve_gate`, the Learning Mode puzzle gate pulled out of `try_upgrade` so towers and the Silo share it. The wave bonus is clamped to the store.
+- Art: the bucket is gone. `MiscArt.silo(level)` paints a corrugated steel silo that stands taller at each level (yellow rim at 2, chimney at 3, gold roof with a sunflower weathervane at 4). `Silo.gd` fills its window live, draws rat damage (bites, cracks, a leaking hole) and the UPGRADE tag. The title screen shows the level-1 silo with a filling window. HUD shows `seeds/capacity` with a fill bar, red when full.
+- Flavor text: the rats' "Bucket-bucket" barks now say "Silo-silo". `tools/ArtPreview.gd` lists `silo_1` to `silo_4`.
+- Docs: README, `docs/ARCHITECTURE.md` (new Economy section), ADR-0002.
+- Checked on rendered screenshots, in short windowed runs (headless can't draw): all four levels, half, full and empty window, the damaged silo, the HUD readout in three states, the UPGRADE tag, and the title screen.
+- Checks:
+  - `tools/SmokeTest.gd --economy` asserts the cap, capped banking, each upgrade and the top-level refusal. Mutation test: with the cap removed it reported 2 `ERROR: economy:` lines (`add_seeds` returned 30 instead of 10), then passed again once restored.
+  - `bash tools/check.sh`: `check: PASS` (`economy: ok`, `lob-free` landed, kills=204, silo 1449/1500, `banked_total=290`).
+- Found along the way: the pilots spawn 53.8 px from the Silo's center, just outside the 52 px use range, so the UPGRADE tag and prompts appear only once a pilot steps closer. That matches banking and is left as is.
+- Committed on `main`, not pushed.
+- Next: merge the two side branches (see In progress).
 
 ### 2026-11-02 · Renamed to HamsterFront
 

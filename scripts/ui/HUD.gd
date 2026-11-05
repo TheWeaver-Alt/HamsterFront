@@ -240,7 +240,14 @@ func _draw_top_bar() -> void:
 	var sb := roundf(sin(_seed_bump * PI) * 3.0)
 	draw_texture(PixelArt.tex("seed_icon"), Vector2(seed_x, 2 - sb))
 	var seed_col := PixelArt.C["y"] if _seed_bump < 0.5 else PixelArt.C["w"]
-	PixelArt.draw_text_outlined(self, Vector2(seed_x + 11, 4 - sb), str(int(roundf(_disp_seeds))), seed_col)
+	var store_full := GameManager.store_space() <= 0
+	if store_full and int(_t * 3.0) % 2 == 0:
+		seed_col = PixelArt.C["r"]
+	var seed_txt := str(int(roundf(_disp_seeds)))
+	PixelArt.draw_text_outlined(self, Vector2(seed_x + 11, 4 - sb), seed_txt, seed_col)
+	# the Silo's store: "/capacity" beside the count and a thin fill bar under it
+	PixelArt.draw_text(self, Vector2(seed_x + 11 + PixelArt.text_width(seed_txt), 4 - sb), "/%d" % GameManager.silo_capacity, PixelArt.C["g"])
+	_fancy_bar("store", Rect2(seed_x + 1, 12, 52, 2), GameManager.store_fill(), seed_col if store_full else PixelArt.C["Y"])
 	if _seed_bump > 0.6:
 		var sp := Vector2(seed_x + 1, 1 - sb)
 		draw_rect(Rect2(sp + Vector2(-1, 0), Vector2(3, 1)), Color(1, 1, 0.8, _seed_bump))

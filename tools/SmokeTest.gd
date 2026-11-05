@@ -13,6 +13,9 @@ var speed := 3.0
 var take_shots := false
 var spawn_all := false
 var lob_free := false
+var economy := false
+var _economy_done := false
+var _economy_failed := 0
 var _lob_stage := 0
 var _lob_rat = null
 var stress := 0
@@ -43,6 +46,8 @@ func _ready() -> void:
 		elif a.begins_with("--learning="):
 			var lv := int(a.get_slice("=", 1))
 			GameManager.learning_levels = [lv, lv]
+		elif a == "--economy":
+			economy = true
 		elif a == "--lob-free":
 			lob_free = true
 		elif a == "--kid":
@@ -87,6 +92,8 @@ func _physics_process(delta: float) -> void:
 	if spawn_all and frame == 90:
 		for k in ["squeaker", "jezzail", "monk", "roomba", "ogre"]:
 			arena.spawn_rat(k, ArenaMap.cell_center(ArenaMap.BURROWS[0]) + Vector2(randf_range(-6, 6), 0), 1.0, 1.0)
+	if economy and not _economy_done and frame >= 20:
+		_economy_check()
 	if lob_free:
 		_lob_free_step()
 	if GameManager.phase == "gameover" or GameManager.wave > waves_target or t > 60.0 * waves_target + 60.0:
@@ -229,6 +236,60 @@ func _lob_free_step() -> void:
 		_lob_stage = 2
 
 
+## Counts and reports a failed economy assertion (the ERROR line is what tools/check.sh fails on).
+func _econ_fail(msg: String) -> void:
+	_economy_failed += 1
+	push_error("economy: " + msg)
+
+
+## Silo store rules (--economy, ADR-0002): the capacity caps add_seeds and banking, and upgrades raise it.
+func _economy_check() -> void:
+	_economy_done = true
+	var p = GameManager.players[0]
+	var saved_seeds: int = GameManager.seeds
+	var saved_learning: Array = GameManager.learning_levels.duplicate()
+	GameManager.learning_levels = [0, 0]
+	p.pouch.take_all()
+	if GameManager.silo_level != 1 or GameManager.silo_capacity != int(GameManager.SILO_CAPACITY[0]):
+		_econ_fail("a new run should start at Silo level 1")
+	GameManager.seeds = GameManager.silo_capacity - 10
+	var got: int = GameManager.add_seeds(30)
+	if got != 10 or GameManager.seeds != GameManager.silo_capacity or GameManager.store_space() != 0:
+		_econ_fail("add_seeds should fill the store and return 10, got %d (seeds=%d)" % [got, GameManager.seeds])
+	if GameManager.add_seeds(5) != 0:
+		_econ_fail("add_seeds should add nothing to a full store")
+	p.pouch.add(20)
+	if p._bank_seeds(20) != 0 or p.pouch.amount != 20:
+		_econ_fail("banking into a full store must leave the seeds in the cheeks")
+	GameManager.seeds = GameManager.silo_capacity - 8
+	if p._bank_seeds(20) != 8 or p.pouch.amount != 12 or GameManager.seeds != GameManager.silo_capacity:
+		_econ_fail("banking should move only what fits (8), pouch=%d seeds=%d" % [p.pouch.amount, GameManager.seeds])
+	p.pouch.take_all()
+	# each upgrade costs seeds and raises the capacity; the top level refuses another
+	for lv in range(2, GameManager.SILO_CAPACITY.size() + 1):
+		GameManager.seeds = 1000
+		var cost: int = GameManager.silo_upgrade_cost()
+		arena.try_upgrade_silo(p)
+		if GameManager.silo_level != lv or GameManager.silo_capacity != int(GameManager.SILO_CAPACITY[lv - 1]) or GameManager.seeds != 1000 - cost:
+			_econ_fail("upgrade to level %d failed (level=%d capacity=%d seeds=%d)" % [lv, GameManager.silo_level, GameManager.silo_capacity, GameManager.seeds])
+	GameManager.seeds = 1000
+	arena.try_upgrade_silo(p)
+	if GameManager.silo_level != GameManager.SILO_CAPACITY.size() or GameManager.seeds != 1000:
+		_econ_fail("the top level must refuse another upgrade")
+	GameManager.silo_level = 1
+	GameManager.silo_capacity = int(GameManager.SILO_CAPACITY[0])
+	GameManager.seeds = 1
+	arena.try_upgrade_silo(p)
+	if GameManager.silo_level != 1:
+		_econ_fail("an upgrade must not go through without the seeds")
+	# back to the run's starting state
+	GameManager.learning_levels = saved_learning
+	GameManager.seeds = saved_seeds
+	GameManager.seeds_changed.emit(GameManager.seeds)
+	if _economy_failed == 0:
+		print("[smoke] economy: ok")
+
+
 func _mortar_in_flight() -> bool:
 	for s in arena.shots.shots:
 		if s.lob and s.kind == "mortar":
@@ -237,6 +298,8 @@ func _mortar_in_flight() -> bool:
 
 
 func _finish() -> void:
+	if economy and not _economy_done:
+		_econ_fail("the check did not run")
 	if lob_free and _lob_stage != 2:
 		push_error("lob-free: the check did not complete (stage %d)" % _lob_stage)
 	set_physics_process(false)
@@ -247,6 +310,7 @@ func _finish() -> void:
 		GameManager.phase, GameManager.wave, _max_wave, GameManager.kills, GameManager.silo_hp, GameManager.silo_max_hp,
 		GameManager.seeds, arena.towers.size(), arena.enemies.size(), GameManager.owned_cards])
 	print("[smoke] jetpack hops=%d math_stars=%d asked=%d" % [_hops, GameManager.math_stars, GameManager.math_asked])
+	print("[smoke] silo level=%d capacity=%d banked_total=%d" % [GameManager.silo_level, GameManager.silo_capacity, GameManager.seeds_banked_total])
 	for p in GameManager.players:
 		print("[smoke] P%d %s hp=%.0f/%.0f pouch=%d heat=%.0f cards=%s" % [p.player_id, p.chassis, p.hp, p.max_hp(), p.pouch.amount, p.wheel.heat, p.owned_cards])
 	get_tree().quit()

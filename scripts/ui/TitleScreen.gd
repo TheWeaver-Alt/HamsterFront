@@ -53,7 +53,8 @@ var _prev_toggle := true
 var _t := 0.0
 var _join_cd := 0.0
 var _show_controls := false
-var _seeds: Array = []           # decorative seeds flying into the bucket
+const MiscArt := preload("res://scripts/art/MiscArt.gd")
+var _seeds: Array = []           # decorative seeds flying onto the silo roof
 var _seed_t := 0.0
 var _rat_bark := {"i": -1, "t": 0.0, "text": ""}
 var _flash := 0.0
@@ -203,7 +204,7 @@ func _update_seeds(delta: float) -> void:
 		s["p"] += v * delta
 		s["life"] -= delta
 		var p: Vector2 = s["p"]
-		if s["life"] <= 0.0 or (p.y > 146.0 and absf(p.x - 320.0) < 22.0 and v.y > 0.0):
+		if s["life"] <= 0.0 or (p.y > 132.0 and absf(p.x - 320.0) < 3.0 + (p.y - 132.0) * 1.6 and v.y > 0.0):
 			_seeds.remove_at(k)
 		k -= 1
 
@@ -371,6 +372,16 @@ func _draw_logo() -> void:
 		PixelArt.draw_text_centered(self, Vector2(320, 86 + sy), "1-2 PLAYER LOCAL CO-OP TOWER DEFENSE", Color(PixelArt.C["W"], sub_a), sub_a >= 1.0)
 
 
+## The title silo's seed-level window, slowly filling and emptying.
+func _draw_title_gauge(origin: Vector2) -> void:
+	var g := MiscArt.silo_gauge(1)
+	var rows := int(roundf((0.55 + 0.35 * sin(_t * 0.9)) * g.size.y))
+	for row in rows:
+		draw_rect(Rect2(origin + Vector2(g.position.x, g.end.y - 1 - row), Vector2(g.size.x, 1)), PixelArt.C["y"] if row % 3 == 0 else PixelArt.C["Y"])
+	if rows > 0:
+		draw_rect(Rect2(origin + Vector2(g.position.x, g.end.y - rows), Vector2(g.size.x, 1)), PixelArt.C["I"])
+
+
 static func _ease_back(x: float) -> float:
 	var u := x - 1.0
 	return 1.0 + 2.7 * u * u * u + 1.7 * u * u
@@ -392,17 +403,13 @@ func _title_flash(p: Vector2, s: float) -> void:
 
 func _draw_scene() -> void:
 	var ground_y := 186.0
-	# silo bucket with seed mound
+	# the Silo (level 1): seeds fly onto its roof while the window fills and empties
+	var silo_tex := PixelArt.tex("silo_1")
 	var bx := 292.0
-	var by := ground_y - 44.0
-	draw_rect(Rect2(bx + 2, ground_y - 2, 52, 4), Color(0, 0, 0, 0.3))
-	for i in 60:
-		var a := PI + float(i) / 60.0 * PI
-		var r := 6.0 + float((i * 7) % 17)
-		var p := Vector2(320 + cos(a) * r, by + 4 + sin(a) * r * 0.7).round()
-		draw_rect(Rect2(p, Vector2(2, 3) if i % 2 == 0 else Vector2(3, 2)), PixelArt.C["s"])
-		draw_rect(Rect2(p + Vector2(0, 1), Vector2(1, 1)), PixelArt.C["S"])
-	draw_texture(PixelArt.tex("silo_bucket"), Vector2(bx, by))
+	var by := ground_y - float(silo_tex.get_height()) + 2.0
+	draw_rect(Rect2(bx + 6, ground_y - 2, 44, 4), Color(0, 0, 0, 0.3))
+	draw_texture(silo_tex, Vector2(bx, by))
+	_draw_title_gauge(Vector2(bx, by))
 	for s in _seeds:
 		var sp: Vector2 = (s["p"] as Vector2).round()
 		draw_rect(Rect2(sp, Vector2(2, 3)), PixelArt.C["s"])

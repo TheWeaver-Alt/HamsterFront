@@ -19,7 +19,7 @@ const KINDS := {
 		"brain": "Ogre", "mass": 12.0, "boss": true},
 }
 
-const SILO_BARKS := ["For the Great Horned Gouda! Munch-gnaw!", "Gnaw-gnaw! Seeds-seeds!", "Bucket-bucket is OURS!"]
+const SILO_BARKS := ["For the Great Horned Gouda! Munch-gnaw!", "Gnaw-gnaw! Seeds-seeds!", "Silo-silo is OURS!"]
 const HIT_BARKS := ["Metal-fur-thing shoots! Scatter-flee!", "Ow-ow! Fur-thing bites back!", "Hide-hide! No-no! Charge-charge!"]
 const FRIENDLY_FIRE_BARKS := ["Not me-me, you blind-fool!", "Watch-look where you roll-crash!", "Treachery-treason!"]
 

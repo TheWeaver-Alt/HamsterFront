@@ -39,8 +39,8 @@ Stored seeds are both the currency and the life. Rats steal from the pile, and t
 
 ## Action items
 
-1. [ ] Add `silo_capacity` to `GameManager`, with a cap on `add_seeds` and banking.
-2. [ ] Redraw the Silo as a silo with a fill gauge (`scripts/arena/Silo.gd`).
-3. [ ] Show store fill and capacity in the HUD.
-4. [ ] Add a Silo capacity upgrade.
+1. [x] Add `silo_capacity` to `GameManager`, with a cap on `add_seeds` and banking. Built 2026-11-05: capacity 150, 250, 400, 600 for Silo levels 1 to 4. First-pass numbers.
+2. [x] Redraw the Silo as a silo with a fill gauge (`scripts/arena/Silo.gd`, `MiscArt.silo`).
+3. [x] Show store fill and capacity in the HUD.
+4. [x] Add a Silo capacity upgrade: 60, 120 and 200 seeds, pressing build next to the Silo.
 5. [ ] Make mech upgrades cost seeds (with the cards rework).

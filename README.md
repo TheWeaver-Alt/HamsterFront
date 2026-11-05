@@ -2,7 +2,7 @@
 
 A 2D top-down action tower defense roguelite for 1–2 players (local co-op), built in **Godot 4.3+** with GDScript.
 
-At the centre of the Backyard sits **The Great Silo**, a plastic bucket overflowing with premium striped sunflower seeds. The **Under-Scurriers**, a glowing-eyed ratfolk cult, tunnel up from beneath the patio to steal the hoard for **The Great Horned Gouda**. Two hamsters climb into scrap-built mechs to stop them.
+At the centre of the Backyard sits **The Great Silo**, a corrugated steel grain silo full of premium striped sunflower seeds. The **Under-Scurriers**, a glowing-eyed ratfolk cult, tunnel up from beneath the patio to steal the hoard for **The Great Horned Gouda**. Two hamsters climb into scrap-built mechs to stop them.
 
 Everything you see and hear is generated at runtime: the pixel art is painted in code, the 3x5 pixel font is a bitmap built in code, and every 8-bit sound is synthesized. The repo contains no image or audio files.
 
@@ -24,15 +24,16 @@ godot --path .
 
 ## How to play
 
-- The Backyard is a ¾-view garden with height. **Plateaus** with cliff faces separate **three canyon lanes**. Rats crawl out of burrows on the west side and funnel down the lanes to the Silo on the patio courtyard. Later waves open burrows in the courtyard itself. If the Silo's seed pile runs out, the run is over.
+- The Backyard is a ¾-view garden with height. **Plateaus** with cliff faces separate **three canyon lanes**. Rats crawl out of burrows on the west side and funnel down the lanes to the Silo on the patio courtyard. Later waves open burrows in the courtyard itself. Rats gnaw the Silo's walls, and if its structure gives out the run is over.
 - Most tower pads are up on the plateaus, where forks can't reach them but snipers, gas and thrown rats still can. Towers on high ground get **+15% range**. Mechs reach the plateaus by **ramps and stairs**, or with the **Soda-Bottle Jetpack** card: sprint into a cliff (or press jump) to rocket up or down it.
 - Dead rats drop seeds. Your mech **vacuums them into the pilot's cheek pouch**. The fuller the pouch, the bigger the hamster's head and the slower the mech (up to -40%).
 - Spend a full pouch in one of three ways:
-  - **Bank** it at the Silo to earn seeds for building.
+  - **Bank** it at the Silo. Banked seeds fill the Silo's store, and the window on its front shows how full it is. Seeds are the currency for everything you build and upgrade. When the store is full, banking stops and the rest stays in your cheeks, so spend seeds or upgrade the Silo.
   - **Cram** it into a tower to start a 10-second **Sugar Rush Overdrive**: double fire rate, +50% damage and a repair.
   - **Spit** it as an emergency shrapnel blast that clears the screen. The seeds are lost.
 - **Sprinting** heats the mech's internal exercise wheel. Above 80% it redlines. At 100% the hamster trips and spins out of control for 1.5 seconds. **Vent** steam to dump the heat. Venting also scalds nearby rats.
 - **Build towers** on the wooden pads, and **upgrade** them up to level 3.
+- **Upgrade the Silo** by standing next to it and pressing build (Y on a gamepad). Each level raises the store's capacity (150, 250, 400, then 600 seeds) and the silo stands taller.
 - After each wave, time freezes and a **vending machine** drops from the sky. Each player picks 1 of 3 upgrade cards.
 
 ### Learning Mode (for young pilots)

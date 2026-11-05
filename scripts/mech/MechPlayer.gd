@@ -278,17 +278,31 @@ func _process_actions(delta: float) -> void:
 			_dump_acc += delta * 70.0
 			while _dump_acc >= 1.0 and pouch.amount > 0:
 				_dump_acc -= 1.0
-				pouch.take(1)
+				if _bank_seeds(1) == 0:
+					Sfx.play("deny")
+					GameManager.arena.fx.float_text(ArenaMap.SILO_CENTER + Vector2(0, -48), "SILO FULL!", PixelArt.C["r"], 1.0, 14.0)
+					_finish_dump()
+					break
 				_dumped += 1
-				GameManager.add_seeds(1)
 				arena.fx.particle(global_position + Vector2(0, -20), (ArenaMap.SILO_CENTER + Vector2(0, -30) - global_position).normalized() * 160.0 + Vector2(randf_range(-20, 20), -40), 0.35, PixelArt.C["s"], 1.0, 120.0, 0.5)
-			context = "BANKING... %d" % _dumped
+			if dumping:
+				context = "BANKING... %d" % _dumped
 	elif near_silo and pouch.amount > 0:
-		context = "[%s] BANK %d SEEDS" % [input.glyph("interact"), pouch.amount]
-		if input.just("interact"):
-			dumping = true
-			_dumped = 0
-			_dump_acc = 0.0
+		var room := GameManager.store_space()
+		if room <= 0:
+			context_ok = false
+			if GameManager.silo_maxed():
+				context = "SILO FULL! CRAM A TOWER"
+			else:
+				context = "SILO FULL! [%s] UPGRADE %d" % [input.glyph("build"), GameManager.silo_upgrade_cost()]
+		else:
+			context = "[%s] BANK %d SEEDS" % [input.glyph("interact"), mini(pouch.amount, room)]
+			if input.just("interact"):
+				dumping = true
+				_dumped = 0
+				_dump_acc = 0.0
+		if input.just("build"):
+			arena.try_upgrade_silo(self)
 	elif tower != null:
 		if pouch.amount >= 10:
 			context = "[%s] CRAM: SUGAR RUSH!" % input.glyph("interact")
@@ -311,11 +325,27 @@ func _process_actions(delta: float) -> void:
 		preview_pad = pad
 		if input.just("build"):
 			arena.try_build(self, pad, kind)
+	elif near_silo and not GameManager.silo_maxed():
+		var silo_cost := GameManager.silo_upgrade_cost()
+		context = "[%s] UPGRADE SILO %d" % [input.glyph("build"), silo_cost]
+		context_ok = GameManager.can_afford(silo_cost)
+		if input.just("build"):
+			arena.try_upgrade_silo(self)
 	elif pouch.is_full():
-		context = "POUCH FULL! BANK AT SILO"
+		context = "POUCH FULL! BANK AT SILO" if GameManager.store_space() > 0 else "POUCH + SILO FULL! CRAM A TOWER"
 		context_ok = false
 	if input.just("ready"):
 		ready_pressed = true
+
+
+## Moves up to n seeds from the cheeks into the Silo's store; returns how many fit.
+func _bank_seeds(n: int) -> int:
+	var moved := mini(mini(n, pouch.amount), GameManager.store_space())
+	if moved <= 0:
+		return 0
+	pouch.take(moved)
+	GameManager.add_seeds(moved)
+	return moved
 
 
 func _finish_dump() -> void:

@@ -1,6 +1,6 @@
 # Project state
 
-**Stage:** playable, reworking the economy · **Last updated:** 2026-11-05 · **Next:** Merge the two finished side branches, then make the chassis data-driven and add the tank and drone.
+**Stage:** playable, reworking the economy · **Last updated:** 2026-11-05 · **Next:** Make the chassis data-driven and add the tank and drone.
 
 <!-- project-kit 1.0.0. This file owns status. /handoff rewrites Now and adds a session-log entry at the top. -->
 
@@ -11,18 +11,16 @@
 - Two mechs, BRAWLER-01 and WHEELER-X: cheek pouch (bank, cram, spit), wheel heat (sprint, redline, spin-out, vent), alt attacks, and the Soda-Bottle Jetpack card for hopping cliffs.
 - The full enemy roster (Clan-Squeakers, Jezzails, Plague-Stink Monks, Doom-Roombas, the Rat-Ogre Bruiser), animated, with death animations and burrow crawl-outs.
 - Five towers with three upgrade levels, a +15% high-ground range bonus and Sugar Rush overdrive.
-- Learning Mode (Counting, Maths to 10, Maths to 20; per player) and KID MODE.
+- Learning Mode (Counting, Maths to 10, Maths to 20; per player) and KID MODE. About half of each level's puzzles are pictures with almost no words (patterns, odd one out, shapes and shadows, mirror, jigsaw piece, balance scale) and the rest are numbers. A wrong answer is never a penalty: a picture hint starts and the wrong buttons fade.
 - Procedural chiptune music for the title, battle and build phases (ducking; M toggles it), gas, flame and scorch hazards, iris scene transitions, and polished FX, HUD and menus.
 - Export presets for Windows, Linux and macOS. Fullscreen by default, F11 toggles, Esc on the title screen quits.
-- `bash tools/check.sh` runs the two-bot playtest headless on Godot 4.7.2. It clears 5 waves and includes a deterministic mortar-shell regression (`--lob-free`).
+- `bash tools/check.sh` fuzzes the Learning Mode question generators (18,000 questions), then runs the two-bot playtest headless on Godot 4.7.2. It clears 5 waves and carries four regressions: a mortar shell outliving its tower (`--lob-free`), a mech wedged in a new tower (`--stuck`), the Silo store rules and the Learning Mode puzzle gate (`--economy`).
 
 ## In progress
 
 - The polish pass (`2689be6` to `bf847bc` on `main`). Its first commit is marked "in progress". Whether more is planned is the owner's call.
 - **Owner's brief of 2026-11-02** (the kid loves the game). Build order is economy, then chassis, then cards, then the Workshop. Done means each piece is playable and `bash tools/check.sh` passes.
-  1. **Visual puzzles**: a separate session reported it finished, as uncommitted changes in the worktree `.claude/worktrees/visual-puzzles-6c3027` (branch `claude/visual-puzzles-6c3027`, cut before the rename). Not reviewed or merged here yet. Its notes are in `visual-puzzles-handover.md` in that worktree.
-  2. **Silo and economy** ([ADR-0002](adr/0002-silo-hp-and-seed-store.md)): built, checked and committed (2026-11-05). Still open: mech upgrades paying in seeds, which comes with the cards rework.
-  - **Mech wedged in a freshly built tower**: fixed on branch `claude/magical-satoshi-a50127` (commit `ecfe698`, with a `--stuck` regression). Not merged. It touches `tools/SmokeTest.gd`, `tools/check.sh` and `docs/ARCHITECTURE.md`, as the economy work does, so the merge needs a small conflict fix.
+  - Done and merged on 2026-11-05: **visual puzzles** (item 1), **Silo and economy** (item 2, [ADR-0002](adr/0002-silo-hp-and-seed-store.md); mech upgrades paying in seeds comes with the cards rework) and the fix for a **mech wedged in a freshly built tower**.
   3. **Four mechs**: make the chassis data-driven (today `"brawler"` and `"wheeler"` are hard-coded in about 115 places), then add the tank (artillery, reusing `ShotManager.lob`) and the drone (flies over cliffs). Weight handling becomes per chassis instead of the one global `pouch_slow`.
   4. **Simpler cards**: icon-first cards that build and upgrade the mech, bought with seeds.
   5. **Workshop**: Vampire Survivors-style upgrades per mech between runs, saved in a file. The tank and drone unlock here. Needs its own ADR for the save file before any code.
@@ -30,12 +28,15 @@
 
 ## Next
 
-1. Commit the economy work, then merge `claude/magical-satoshi-a50127` and `claude/visual-puzzles-6c3027` (the owner's call), fixing the overlaps in `tools/SmokeTest.gd`, `tools/check.sh`, `README.md` and `docs/ARCHITECTURE.md`.
-2. Make the chassis data-driven, then add the tank and drone.
+1. Make the chassis data-driven, then add the tank and drone.
+2. Simpler cards that build and upgrade the mech, bought with seeds (finishes ADR-0002 item 5).
+3. Write the Workshop's ADR (the save file) before any Workshop code.
 
 ## Known gaps and risks
 
 - The economy numbers (capacity 150/250/400/600, upgrade costs 60/120/200, the wave bonus clamped to the store) are a first pass. No real player has tried them yet, and the bots start with 400 seeds, so the cap barely bites in `tools/check.sh`.
+- The new picture puzzles were checked on screenshots for five types (pattern, odd, mirror, scale, piece) at one level. The other types need a look while playing.
+- The two merged worktrees (`.claude/worktrees/visual-puzzles-6c3027` and `.claude/worktrees/magical-satoshi-a50127`) and their branches are still on disk.
 - A wave bonus that doesn't fit in the store is lost. The float text says "SILO FULL", but a child may still find it unfair. Revisit after play.
 - `tools/check.sh`'s import step doesn't parse every script. A script that only loads at runtime (the tower brains, say) is caught only if the smoke run uses it.
 - The smoke test is unseeded, so a failure can't be replayed on demand.
@@ -60,6 +61,19 @@
 | 2026-11-02 | GitHub's default branch is `main` | owner | GitHub repo settings |
 
 ## Session log
+
+### 2026-11-05 · Merged the puzzles and mech-stuck branches
+
+- Merged `claude/magical-satoshi-a50127` (`ecfe698`, mech wedged inside a freshly built tower, with a `--stuck` regression) and `claude/visual-puzzles-6c3027`. The puzzles work had been left uncommitted in its worktree, so it was committed on its branch first (`130ffb8`). The conflicts were additive (`tools/SmokeTest.gd`, `tools/check.sh`, `docs/ARCHITECTURE.md`): both sides' flags and text were kept.
+- The puzzles branch adds picture types (pattern, odd, same/shadow, bigger, order, mirror, piece, scale, chain), a validator that recomputes each answer from its picture, picture hints, and a fuzz that `tools/check.sh` runs. Its report mentioned a handover file that does not exist; the diff and the checks were reviewed instead.
+- Gap found: the bots never reach a tower-upgrade puzzle in a normal run (the 6 puzzles asked in 3 waves were all card picks), so the `_solve_gate` refactor and the Silo upgrade puzzle were untested with Learning Mode on. Added the `--economy` gate check: with Learning Mode on, upgrading the Silo and a tower must each ask exactly one puzzle, and the tree must be unpaused afterwards.
+- Checked on screenshots in a short windowed run of `MathQuizPreview`: pattern, odd one out, mirror, balance scale, jigsaw piece and the wrong-answer hint state.
+- Checks:
+  - `bash tools/check.sh`: `check: PASS` (quiz validator 0 of 11 corruptions slipped through, fuzz 18000 questions 0 bad, `economy: ok`, `economy gate: ok`, `lob-free` landed, `stuck: cases=154 wedged=0`, `banked_total=260`).
+  - Learning Mode on, `--waves=3 --learning=1` and `--learning=3` with `--economy`: `check: PASS`, 6 puzzles asked and solved each time.
+  - Mutation test: with `_solve_gate` made to skip the puzzle, the gate check reported 2 `ERROR: economy:` lines ("should ask exactly one puzzle (asked 0, then 0)"); restored.
+- Committed on `main`, not pushed.
+- Next: make the chassis data-driven, then add the tank and drone.
 
 ### 2026-11-05 · Silo and seed economy (ADR-0002)
 

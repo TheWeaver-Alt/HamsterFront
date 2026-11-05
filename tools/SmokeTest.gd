@@ -17,6 +17,13 @@ var lob_free := false
 var economy := false
 var _economy_done := false
 var _economy_failed := 0
+var _gate_stage := 0
+var _gate_frames := 0
+var _gate_asked := 0
+var _gate_level := 0
+var _gate_fail_base := 0
+var _gate_tower = null
+var _gate_learning: Array = []
 var stuck := false
 var _stuck_stage := 0
 var _stuck_cases := 0
@@ -110,6 +117,8 @@ func _physics_process(delta: float) -> void:
 			arena.spawn_rat(k, ArenaMap.cell_center(ArenaMap.BURROWS[0]) + Vector2(randf_range(-6, 6), 0), 1.0, 1.0)
 	if economy and not _economy_done and frame >= 20:
 		_economy_check()
+	if economy and _economy_done and _gate_stage < 3 and (not stuck or _stuck_stage == 2):
+		_gate_step()
 	if lob_free:
 		_lob_free_step()
 	if GameManager.phase == "gameover" or GameManager.wave > waves_target or t > 60.0 * waves_target + 60.0:
@@ -306,6 +315,68 @@ func _economy_check() -> void:
 		print("[smoke] economy: ok")
 
 
+## Learning Mode gate (--economy): with Learning Mode on, upgrading the Silo and then a tower each freeze
+## time and ask exactly one puzzle. The bots solve it by mashing confirm, and the tree must be unpaused after.
+func _gate_step() -> void:
+	var p = GameManager.players[0]
+	if _gate_stage == 0:
+		_gate_fail_base = _economy_failed
+		_gate_learning = GameManager.learning_levels.duplicate()
+		GameManager.learning_levels = [2, 2]
+		GameManager.seeds = 400
+		GameManager.seeds_changed.emit(GameManager.seeds)
+		_gate_asked = GameManager.math_asked
+		_gate_frames = 0
+		arena.try_upgrade_silo(p)
+		_gate_stage = 1
+		return
+	_gate_frames += 1
+	if _gate_frames > 2400:
+		_econ_fail("the Learning Mode gate never finished (stage %d)" % _gate_stage)
+		_finish_gate()
+	elif _gate_stage == 1 and GameManager.silo_level == 2:
+		_gate_assert("Silo upgrade")
+		_gate_tower = null
+		for t in arena.towers:
+			if is_instance_valid(t) and t.alive and t.level < GameManager.MAX_TOWER_LEVEL:
+				_gate_tower = t
+				break
+		if _gate_tower == null:
+			var cell := _nearest_free_pad(ArenaMap.SILO_CENTER)
+			if cell != Vector2i(-1, -1) and arena.try_build(p, cell, "gatling"):
+				_gate_tower = arena.pad_towers[cell]
+		if _gate_tower == null:
+			_econ_fail("there was no tower to upgrade for the gate check")
+			_finish_gate()
+			return
+		GameManager.seeds = 400
+		_gate_asked = GameManager.math_asked
+		_gate_level = _gate_tower.level
+		_gate_frames = 0
+		arena.try_upgrade(p, _gate_tower)
+		_gate_stage = 2
+	elif _gate_stage == 2 and is_instance_valid(_gate_tower) and _gate_tower.level > _gate_level:
+		_gate_assert("tower upgrade")
+		_finish_gate()
+
+
+func _gate_assert(what: String) -> void:
+	if GameManager.math_asked != _gate_asked + 1:
+		_econ_fail("the %s should ask exactly one puzzle (asked %d, then %d)" % [what, _gate_asked, GameManager.math_asked])
+	if get_tree().paused:
+		_econ_fail("the tree stayed paused after the %s puzzle" % what)
+
+
+func _finish_gate() -> void:
+	GameManager.learning_levels = _gate_learning
+	get_tree().paused = false
+	GameManager.silo_level = 1
+	GameManager.silo_capacity = int(GameManager.SILO_CAPACITY[0])
+	_gate_stage = 3
+	if _economy_failed == _gate_fail_base:
+		print("[smoke] economy gate: ok (Silo and tower upgrades each asked one puzzle)")
+
+
 func _mortar_in_flight() -> bool:
 	for s in arena.shots.shots:
 		if s.lob and s.kind == "mortar":
@@ -400,6 +471,8 @@ func _stuck_run() -> void:
 func _finish() -> void:
 	if economy and not _economy_done:
 		_econ_fail("the check did not run")
+	if economy and _economy_done and _gate_stage != 3:
+		_econ_fail("the Learning Mode gate check did not finish (stage %d)" % _gate_stage)
 	if lob_free and _lob_stage != 2:
 		push_error("lob-free: the check did not complete (stage %d)" % _lob_stage)
 	set_physics_process(false)

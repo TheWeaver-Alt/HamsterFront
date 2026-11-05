@@ -34,7 +34,7 @@ godot --path .
 - **Sprinting** heats the mech's internal exercise wheel. Above 80% it redlines. At 100% the hamster trips and spins out of control for 1.5 seconds. **Vent** steam to dump the heat. Venting also scalds nearby rats.
 - **Build towers** on the wooden pads, and **upgrade** them up to level 3.
 - **Upgrade the Silo** by standing next to it and pressing build (Y on a gamepad). Each level raises the store's capacity (150, 250, 400, then 600 seeds) and the silo stands taller.
-- After each wave, time freezes and a **vending machine** drops from the sky. Each player picks 1 of 3 upgrade cards.
+- After each wave, time freezes and a **vending machine** drops from the sky. Each player picks 1 of 3 upgrade cards. Cards are pictures: a big drawing of what the card does, a short name, and one to three arrows for how strong it is, with no percentages to read. Cursed cards show the good thing over the bad thing, each with its own arrows. A small grey line under your hand spells it out for a grown-up.
 
 ### Learning Mode (for young pilots)
 

@@ -144,42 +144,50 @@ func _draw_loadout(p, idx: int) -> void:
 	if owned.is_empty():
 		PixelArt.draw_text(self, Vector2(x + 6, y), "NO CARDS YET", PixelArt.C["G"].lightened(0.3))
 		return
+	# one small picture per card (the picture is the card); a number marks repeats
+	var ix := x + 6.0
+	var iy := y
 	for id in owned.keys():
 		var card: Dictionary = CardDB.get_card(id)
 		if card.is_empty():
 			continue
-		if y > r.end.y - 10:
-			PixelArt.draw_text(self, Vector2(x + 6, y), "...", PixelArt.C["g"])
+		if ix + 17.0 > r.end.x - 4.0:
+			ix = x + 6.0
+			iy += 20.0
+		if iy > r.end.y - 18.0:
+			PixelArt.draw_text(self, Vector2(ix, iy + 5), "...", PixelArt.C["g"])
 			break
-		var tc := CardDB.tier_color(card["tier"])
-		draw_rect(Rect2(x + 6, y + 1, 3, 4), tc)
+		draw_texture(PixelArt.tex("card_" + String(CardFaces.of(card)["icon"])), Vector2(ix, iy))
+		draw_rect(Rect2(ix, iy + 17, 16, 2), CardDB.tier_color(card["tier"]))
 		var n: int = owned[id]
-		var label: String = card["name"]
 		if n > 1:
-			label += " X%d" % n
-		PixelArt.draw_text(self, Vector2(x + 12, y), _clip(label, 170.0), tc.lightened(0.2))
-		y += 8
+			PixelArt.draw_text_outlined(self, Vector2(ix + 9, iy + 9), str(n), PixelArt.C["y"])
+		ix += 19.0
 
 
 func _draw_team_cards() -> void:
-	# team-wide cards (towers / synergy) bought by anyone
-	var names: Array = []
+	# team-wide cards (towers / synergy) bought by anyone, as pictures
+	var team: Array = []
 	for id in GameManager.owned_cards.keys():
 		var card: Dictionary = CardDB.get_card(id)
 		if card.is_empty() or card.has("mods"):
 			continue
-		names.append(card)
-	if names.is_empty():
+		team.append(card)
+	if team.is_empty():
 		return
-	var r := Rect2(14, 268, 612, 12 + ceili(names.size() / 3.0) * 8)
+	var per_row := 30
+	var r := Rect2(14, 268, 612, 8 + ceili(team.size() / float(per_row)) * 20)
 	PixelArt.draw_box(self, r, Color(0.08, 0.05, 0.1, 0.9), PixelArt.C["o"].darkened(0.3))
-	PixelArt.draw_text(self, r.position + Vector2(6, 4), "TEAM:", PixelArt.C["o"])
+	PixelArt.draw_text(self, r.position + Vector2(6, 8), "TEAM:", PixelArt.C["o"])
 	var i := 0
-	for card in names:
-		var cx := r.position.x + 36 + (i % 3) * 192
-		var cy := r.position.y + 4 + int(i / 3) * 8
-		var tc := CardDB.tier_color(card["tier"])
-		PixelArt.draw_text(self, Vector2(cx, cy), _clip(card["name"], 186.0), tc)
+	for card in team:
+		var ix := r.position.x + 40.0 + (i % per_row) * 19.0
+		var iy := r.position.y + 4.0 + int(i / per_row) * 20.0
+		draw_texture(PixelArt.tex("card_" + String(CardFaces.of(card)["icon"])), Vector2(ix, iy))
+		draw_rect(Rect2(ix, iy + 17, 16, 2), CardDB.tier_color(card["tier"]))
+		var n: int = GameManager.owned_cards[card["id"]]
+		if n > 1:
+			PixelArt.draw_text_outlined(self, Vector2(ix + 9, iy + 9), str(n), PixelArt.C["y"])
 		i += 1
 
 

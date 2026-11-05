@@ -99,6 +99,7 @@ func _ready() -> void:
 		load("res://scripts/art/TowerArt.gd"),
 		load("res://scripts/art/MiscArt.gd"),
 		load("res://scripts/art/UIArt.gd"),
+		load("res://scripts/art/CardArt.gd"),
 	]
 	_hit_flash_shader = load("res://shaders/hit_flash.gdshader")
 

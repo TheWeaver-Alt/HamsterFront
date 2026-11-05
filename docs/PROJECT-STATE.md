@@ -1,6 +1,6 @@
 # Project state
 
-**Stage:** playable, reworking the economy · **Last updated:** 2026-11-05 · **Next:** Make the chassis data-driven and add the tank and drone.
+**Stage:** playable, building the mech roster · **Last updated:** 2026-11-05 · **Next:** Add the tank and the drone (roles confirmed in ADR-0003).
 
 <!-- project-kit 1.0.0. This file owns status. /handoff rewrites Now and adds a session-log entry at the top. -->
 
@@ -8,6 +8,7 @@
 
 - A full run plays end to end: a join screen (keyboard and mouse, P2 keyboard, gamepads), the ¾-view elevated Backyard with three canyon lanes, plateaus and ramps, build and wave phases, the vending-machine card draft after each wave, and game over when the Silo's structure gives out.
 - The Silo is a steel grain silo with a seed-level window ([ADR-0002](adr/0002-silo-hp-and-seed-store.md)). Seeds are the one currency and live in its store, which holds 150 and can be upgraded to 250, 400 and 600 (60, 120 and 200 seeds). A full store stops banking and the rest stays in the cheeks. The HUD shows `seeds/capacity`, and an UPGRADE tag floats above the Silo when a pilot is in reach.
+- Cards are pictures: each of the 37 has a big drawing of what it does, a short name and one to three arrows for how strong it is. Cursed cards stack the good picture over the bad one. The old sentences are a small grey line under the hand for a grown-up. The pause menu and the game-over screen list cards as strips of the same pictures (`scripts/core/CardFaces.gd`, `scripts/art/CardArt.gd`).
 - Two mechs, BRAWLER-01 and WHEELER-X: cheek pouch (bank, cram, spit), wheel heat (sprint, redline, spin-out, vent), alt attacks, and the Soda-Bottle Jetpack card for hopping cliffs.
 - The full enemy roster (Clan-Squeakers, Jezzails, Plague-Stink Monks, Doom-Roombas, the Rat-Ogre Bruiser), animated, with death animations and burrow crawl-outs.
 - Five towers with three upgrade levels, a +15% high-ground range bonus and Sugar Rush overdrive.
@@ -21,19 +22,22 @@
 - The polish pass (`2689be6` to `bf847bc` on `main`). Its first commit is marked "in progress". Whether more is planned is the owner's call.
 - **Owner's brief of 2026-11-02** (the kid loves the game). Build order is economy, then chassis, then cards, then the Workshop. Done means each piece is playable and `bash tools/check.sh` passes.
   - Done and merged on 2026-11-05: **visual puzzles** (item 1), **Silo and economy** (item 2, [ADR-0002](adr/0002-silo-hp-and-seed-store.md); mech upgrades paying in seeds comes with the cards rework) and the fix for a **mech wedged in a freshly built tower**.
-  3. **Four mechs**: make the chassis data-driven (today `"brawler"` and `"wheeler"` are hard-coded in about 115 places), then add the tank (artillery, reusing `ShotManager.lob`) and the drone (flies over cliffs). Weight handling becomes per chassis instead of the one global `pouch_slow`.
-  4. **Simpler cards**: icon-first cards that build and upgrade the mech, bought with seeds.
+  3. **Four mechs** ([ADR-0003](adr/0003-chassis-roster-and-weight.md), Proposed): step one is done and checked. The chassis are data (`scripts/mech/Chassis.gd`) with a visual and a weapon script each, and each pilot picks a mech on the title screen. Still to do: the tank (HOWITZER-9) and the drone (WHIRLYBIRD-Z), with their art, weapons, weight behavior and bots that drive them.
+  4. **Simpler cards**: done as picture-first cards (all 37 redrawn, none cut). Still open: cards that build and upgrade the mech, paid for in seeds (ADR-0002 item 5).
   5. **Workshop**: Vampire Survivors-style upgrades per mech between runs, saved in a file. The tank and drone unlock here. Needs its own ADR for the save file before any code.
   6. **Two gamepads**: `PlayerInput` and the title screen look like they already support `pad0` and `pad1`. Try it on real hardware.
+  7. **Handbook** (an encyclopedia of rats, mechs, towers and cards, picture-first): requested by the owner on 2026-11-05, not started. Most of its data exists (the card pictures, the rat and tower stats, the mech roster). Remembering what a child has discovered needs the save file, so that part waits for the Workshop's ADR.
 
 ## Next
 
-1. Make the chassis data-driven, then add the tank and drone.
-2. Simpler cards that build and upgrade the mech, bought with seeds (finishes ADR-0002 item 5).
+1. Add the tank (HOWITZER-9) and the drone (WHIRLYBIRD-Z): art, weapons, weight behavior, and bots that drive them.
+2. Cards that build and upgrade the mech, bought with seeds (finishes ADR-0002 item 5), and the handbook.
 3. Write the Workshop's ADR (the save file) before any Workshop code.
 
 ## Known gaps and risks
 
+- The 39 card pictures are first-pass art. A few are abstract (salt, sticky shells, sugar, sneeze) and need a child's eye. They were checked on screenshots of the draft screen (one and two pilots), the pause menu and the game-over screen, not on the title screen. On cursed cards the pictures are drawn small (the card has two rows).
+- The before/after mech comparison covers idle, cheeks, downed and walking. Firing and the alt attacks are not in it (random spread and particles), so the bots cover their logic and a person has to look at the rest. The capture and diff scripts were scratch work and are not in the repo.
 - The economy numbers (capacity 150/250/400/600, upgrade costs 60/120/200, the wave bonus clamped to the store) are a first pass. No real player has tried them yet, and the bots start with 400 seeds, so the cap barely bites in `tools/check.sh`.
 - The new picture puzzles were checked on screenshots for five types (pattern, odd, mirror, scale, piece) at one level. The other types need a look while playing.
 - The two merged worktrees (`.claude/worktrees/visual-puzzles-6c3027` and `.claude/worktrees/magical-satoshi-a50127`) and their branches are still on disk.
@@ -53,6 +57,9 @@
 |---|---|---|---|
 | 2026-11-02 | Godot 4 + GDScript, every asset generated in code (recorded from the code as built) | owner | [ADR-0001](adr/0001-godot-4-and-procedural-assets.md) |
 | 2026-11-02 | Silo keeps its HP and gains a seed store with capacity; seeds are the universal currency | owner | [ADR-0002](adr/0002-silo-hp-and-seed-store.md) |
+| 2026-11-05 | Mechs are a data roster with a script per chassis. The four mechs' roles and numbers are confirmed (the numbers are a first pass). | owner | [ADR-0003](adr/0003-chassis-roster-and-weight.md) |
+| 2026-11-05 | Cards are picture-first and all 37 are redrawn (none cut); no percentages on the card | owner | this file, `PRODUCT.md` principle 4 |
+| 2026-11-05 | A handbook of rats, mechs, towers and cards is wanted; discovery tracking waits for the save file | owner | this file |
 | 2026-11-02 | Robot and octopus from the start; tank and drone unlock in the Workshop (to go into the Workshop's ADR) | owner | this file |
 | 2026-11-02 | Build order: economy, chassis, cards, Workshop; visual puzzles in parallel | owner | this file |
 | 2026-11-02 | The game is called HamsterFront (was "Defence of Hamsterland: Mech-Pouch Protocol"). The title screen keeps "MECH-POUCH PROTOCOL" as its subtitle. | owner | `project.godot`, `README.md` |
@@ -61,6 +68,32 @@
 | 2026-11-02 | GitHub's default branch is `main` | owner | GitHub repo settings |
 
 ## Session log
+
+### 2026-11-05 · Picture-first cards
+
+- The owner: kids do not get "20% more", so cards must be illustration-driven. The card art used to be one small icon per kind (wrench, tower, hearts, cheese), with everything else in the name and wrapped sentences.
+- New `CardFaces` (`scripts/core/CardFaces.gd`): per card a short name (13 characters at most), a picture, 1 to 3 arrows, and on cursed cards a bad picture and bad arrows. `CardArt` (`scripts/art/CardArt.gd`) paints the 39 pictures, 16x16 each, from shared parts (hearts, rats, seeds, flames, bolts, hamster faces). They were rendered to a contact sheet headlessly and 8 weak ones redrawn (pierce, chain, brothers, leak, invert, radiator, sneeze, weight_down).
+- `CardDraftUI`: the picture is the card (3x, or 4x for one pilot), then the short name, arrows with dim ghosts for the ones not earned, and a pip per copy you can own. Cursed cards stack the good over the bad. The grown-up sentence sits small and grey under the hand (below the prompt when there is one hand). The pause menu and game-over screen show strips of the same pictures with repeat counts.
+- `PRODUCT.md` gains principle 4, "pictures before words" (proposed). ADR-0003 is now Accepted: the owner confirmed the tank and drone roles.
+- The owner also asked for a handbook (encyclopedia) of rats, mechs, towers and cards. Added to the roadmap as item 7; discovery tracking needs the save file.
+- Checks:
+  - `tools/SmokeTest.gd --cards` asserts every card has a face, a short name of 13 characters or fewer, a real picture, 1 to 3 arrows, and a bad picture on cursed cards. Mutation test: a 18-character name and a misspelled picture name gave 2 `ERROR: cards:` lines; restored.
+  - `bash tools/check.sh`: `check: PASS` (`cards: ok (37 ...)`, quiz fuzz 18000 questions 0 bad, `economy: ok`, `economy gate: ok`, `lob-free` landed, `stuck: cases=154 wedged=0 embedded_frames=0`).
+  - Looked at on screenshots from short windowed runs: the real draft screen for two pilots and for one, the pause menu and the game-over screen.
+- Committed on `main` together with the mech roster work below, not pushed.
+- Next: the tank and the drone.
+
+### 2026-11-05 · Mechs become a data roster (ADR-0003, step one)
+
+- New `scripts/mech/Chassis.gd`: the roster (name, blurb, base stats, weapon hardpoint, shadow, unlock source) plus `apply()`, which puts a chassis's own scripts on a mech. `GameManager.player_chassis` (one id per pilot) replaces `p1_chassis`.
+- `MechVisual` and `WeaponMount` are now shared bases with overridable hooks. BRAWLER-01 and WHEELER-X moved, function by function and verbatim, into `scripts/mech/chassis/{Brawler,Wheeler}{Visual,Weapon}.gd`. No `if chassis ==` is left outside `Chassis.gd`. `MechPlayer`'s hard-coded stats, names, hardpoint offsets, vent position, sprint trail and shadow now come from the roster.
+- Title screen: each joined pilot picks their own mech with left and right (before, only a lone pilot could), with the name and blurb read from the roster.
+- Proved behavior-preserving: a deterministic capture (fixed frame rate, random and real-time layers hidden, two runs of the baseline identical) of both mechs in 6 states before and after the change gave 0 differing pixels in all 12 images. The bots drove both mechs through 5 waves with no engine errors.
+- Caught on the way: `visual` had to be typed `MechVisual` (not `Node2D`) for `visual.vent_offset()` to parse, and the builder script missed one dedent in `BrawlerWeapon.gd`. The check caught both at once.
+- ADR-0003 records the roster architecture and proposes the tank (HOWITZER-9: artillery, stomp, barely slowed by weight) and the drone (WHIRLYBIRD-Z: flies over cliffs, seed bombs, rotor gust, slowed most by weight) for the owner to confirm.
+- Checks: `bash tools/check.sh`: `check: PASS` (quiz fuzz 18000 questions 0 bad, `economy: ok`, `economy gate: ok`, `lob-free` landed, `stuck: cases=154 wedged=0 embedded_frames=0`).
+- Committed on `main` together with the picture cards above, not pushed.
+- Next: the tank and the drone.
 
 ### 2026-11-05 · Merged the puzzles and mech-stuck branches
 

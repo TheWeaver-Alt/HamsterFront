@@ -3,12 +3,12 @@ extends Node
 ##
 ## Card fields:
 ##   id, name, tier ("mod" | "tower" | "synergy" | "cursed"), desc, downside (cursed only),
-##   weight, max (stack cap), min_wave, coop (true = co-op only), chassis ("" | "brawler" | "wheeler"),
+##   weight, max (stack cap), min_wave, coop (true = co-op only), chassis ("" or a Chassis id),
 ##   mods  -> applied to the picking player's StatBlock   {"add":{}, "mul":{}, "flags":[]}
 ##   gmods -> applied to GameManager.gstats (towers / whole team)
 ##   on_pick -> optional hook name handled in apply_card()
 ##
-## Player stat keys (see MechPlayer.BASE_STATS): max_hp, move_speed, sprint_mult, damage_mult,
+## Player stat keys (see the stats in scripts/mech/Chassis.gd): max_hp, move_speed, sprint_mult, damage_mult,
 ##   fire_rate_mult, pierce, extra_projectiles, pouch_capacity, pouch_slow, pickup_radius,
 ##   heat_rate, heat_decay, alt_damage_mult, alt_size_mult, spit_damage_mult, revive_speed,
 ##   lifesteal, seed_leak, damage_taken, vent_heal, spinout_bonus

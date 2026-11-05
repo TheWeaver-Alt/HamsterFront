@@ -207,18 +207,28 @@ func _draw_rats(a: float, front: bool) -> void:
 
 
 func _draw_card_list(panel: Rect2) -> void:
-	# one line per pilot: their card names, clipped to the panel
-	var y := panel.position.y + 10 + _stats.size() * 12
+	# one row of card pictures per pilot (the picture is the card); a number marks repeats
+	var y := panel.position.y + 8 + _stats.size() * 12
+	var per_row := int((panel.size.x - 40.0) / 17.0)
 	for p in GameManager.players:
 		if not is_instance_valid(p):
 			continue
-		var names: Array = []
+		PixelArt.draw_text(self, Vector2(panel.position.x + 10, y + 5), "P%d" % p.player_id, p.color())
+		var x := panel.position.x + 28.0
+		var shown := 0
 		for id in p.owned_cards.keys():
 			var c: Dictionary = CardDB.get_card(id)
-			if not c.is_empty():
-				names.append(c["name"])
-		var line := "P%d: " % p.player_id + (", ".join(PackedStringArray(names)) if not names.is_empty() else "NO CARDS")
-		while PixelArt.text_width(line) > panel.size.x - 20 and line.length() > 4:
-			line = line.substr(0, line.length() - 4) + ".."
-		PixelArt.draw_text(self, Vector2(panel.position.x + 10, y), line, p.color())
-		y += 9
+			if c.is_empty():
+				continue
+			if shown >= per_row:
+				PixelArt.draw_text(self, Vector2(x, y + 5), "+", p.color())
+				break
+			draw_texture(PixelArt.tex("card_" + String(CardFaces.of(c)["icon"])), Vector2(x, y))
+			var n: int = p.owned_cards[id]
+			if n > 1:
+				PixelArt.draw_text_outlined(self, Vector2(x + 9, y + 10), str(n), PixelArt.C["y"])
+			x += 17.0
+			shown += 1
+		if shown == 0:
+			PixelArt.draw_text(self, Vector2(x, y + 5), "NO CARDS", PixelArt.C["g"])
+		y += 17.0

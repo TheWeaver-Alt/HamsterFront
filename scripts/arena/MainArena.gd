@@ -260,10 +260,7 @@ func _spawn_players() -> void:
 	var starts := [ArenaMap.SILO_CENTER + Vector2(-40, 36), ArenaMap.SILO_CENTER + Vector2(40, 36)]
 	for i in GameManager.num_players:
 		var m = MechScene.instantiate()
-		var chassis := "brawler" if i == 0 else "wheeler"
-		if GameManager.num_players == 1:
-			chassis = GameManager.p1_chassis
-		m.setup(i + 1, chassis, GameManager.player_devices[i])
+		m.setup(i + 1, str(GameManager.player_chassis[i]), GameManager.player_devices[i])
 		m.position = starts[i]
 		world.add_child(m)
 		GameManager.players.append(m)

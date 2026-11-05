@@ -15,6 +15,8 @@ var spawn_all := false
 var _spawned_all := false
 var lob_free := false
 var economy := false
+var cards_check := false
+var _cards_done := false
 var _economy_done := false
 var _economy_failed := 0
 var _gate_stage := 0
@@ -61,6 +63,8 @@ func _ready() -> void:
 		elif a.begins_with("--learning="):
 			var lv := int(a.get_slice("=", 1))
 			GameManager.learning_levels = [lv, lv]
+		elif a == "--cards":
+			cards_check = true
 		elif a == "--economy":
 			economy = true
 		elif a == "--lob-free":
@@ -115,6 +119,8 @@ func _physics_process(delta: float) -> void:
 		_spawned_all = true
 		for k in ["squeaker", "jezzail", "monk", "roomba", "ogre"]:
 			arena.spawn_rat(k, ArenaMap.cell_center(ArenaMap.BURROWS[0]) + Vector2(randf_range(-6, 6), 0), 1.0, 1.0)
+	if cards_check and not _cards_done:
+		_cards_check()
 	if economy and not _economy_done and frame >= 20:
 		_economy_check()
 	if economy and _economy_done and _gate_stage < 3 and (not stuck or _stuck_stage == 2):
@@ -377,6 +383,16 @@ func _finish_gate() -> void:
 		print("[smoke] economy gate: ok (Silo and tower upgrades each asked one puzzle)")
 
 
+## Picture-first cards (--cards): every card has a picture, arrows and a short name (see CardFaces.validate).
+func _cards_check() -> void:
+	_cards_done = true
+	var problems := CardFaces.validate(CardDB.cards)
+	for p in problems:
+		push_error("cards: " + str(p))
+	if problems.is_empty():
+		print("[smoke] cards: ok (%d cards have a picture, arrows and a short name)" % CardDB.cards.size())
+
+
 func _mortar_in_flight() -> bool:
 	for s in arena.shots.shots:
 		if s.lob and s.kind == "mortar":
@@ -469,6 +485,8 @@ func _stuck_run() -> void:
 
 
 func _finish() -> void:
+	if cards_check and not _cards_done:
+		push_error("cards: the check did not run")
 	if economy and not _economy_done:
 		_econ_fail("the check did not run")
 	if economy and _economy_done and _gate_stage != 3:

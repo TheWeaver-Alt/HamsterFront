@@ -1,28 +1,11 @@
 class_name MechPlayer
 extends CharacterBody2D
 ## A hamster-piloted junkyard mech. player_id 1/2 picks the input device from
-## GameManager.player_devices and (by default) the chassis: P1 BRAWLER-01, P2 WHEELER-X.
+## GameManager.player_devices and the chassis from GameManager.player_chassis (see Chassis).
 
 signal went_down
 signal revived
 
-const BASE_STATS := {
-	"brawler": {
-		"max_hp": 140.0, "move_speed": 74.0, "sprint_mult": 1.6, "damage_mult": 1.0, "fire_rate_mult": 1.0,
-		"pierce": 0.0, "extra_projectiles": 0.0, "pouch_capacity": 50.0, "pouch_slow": 0.4,
-		"pickup_radius": 30.0, "heat_rate": 34.0, "heat_decay": 16.0, "alt_damage_mult": 1.0,
-		"alt_size_mult": 1.0, "spit_damage_mult": 1.0, "revive_speed": 1.0, "lifesteal": 0.0,
-		"seed_leak": 0.0, "damage_taken": 1.0, "vent_heal": 0.0, "spinout_bonus": 0.0,
-	},
-	"wheeler": {
-		"max_hp": 100.0, "move_speed": 98.0, "sprint_mult": 1.55, "damage_mult": 1.0, "fire_rate_mult": 1.0,
-		"pierce": 0.0, "extra_projectiles": 0.0, "pouch_capacity": 40.0, "pouch_slow": 0.4,
-		"pickup_radius": 36.0, "heat_rate": 30.0, "heat_decay": 15.0, "alt_damage_mult": 1.0,
-		"alt_size_mult": 1.0, "spit_damage_mult": 1.0, "revive_speed": 1.0, "lifesteal": 0.0,
-		"seed_leak": 0.0, "damage_taken": 1.0, "vent_heal": 0.0, "spinout_bonus": 0.0,
-	},
-}
-const NAMES := {"brawler": "BRAWLER-01", "wheeler": "WHEELER-X"}
 const PLAYER_COLORS := [Color8(255, 150, 70), Color8(90, 200, 230)]
 
 const REVIVE_BARKS := [
@@ -86,26 +69,26 @@ var _spin_wander := Vector2.ZERO
 @onready var pouch: CheekPouchComponent = $CheekPouchComponent
 @onready var wheel: WheelHeatComponent = $WheelHeatComponent
 @onready var weapon: WeaponMount = $WeaponMount
-@onready var visual: Node2D = $Visual
+@onready var visual: MechVisual = $Visual
 @onready var overlay: Node2D = $Overlay
 
 
 func setup(id: int, chassis_name: String, device: String) -> void:
 	player_id = id
-	chassis = chassis_name
+	chassis = chassis_name if Chassis.DEFS.has(chassis_name) else Chassis.IDS[0]
+	Chassis.apply(self, chassis)
 	input = PlayerInput.new(device)
-	stats = StatBlock.new(BASE_STATS[chassis])
+	stats = StatBlock.new(Chassis.base_stats(chassis))
 	hp = stats.g("max_hp")
 
 
 func _ready() -> void:
-	if stats == null:
-		setup(player_id, "brawler" if player_id == 1 else "wheeler", "kbm" if player_id == 1 else "pad0")
+	assert(stats != null, "MechPlayer.setup() must run before the mech enters the tree")
 	pouch.mech = self
 	wheel.mech = self
 	wheel.vented.connect(_on_vented)
 	wheel.spun_out.connect(_on_spun_out)
-	weapon.position = Vector2(0, -9) if chassis == "brawler" else Vector2(0, -28)
+	weapon.position = Chassis.def(chassis)["weapon_pos"]
 	_visual_base = visual.position
 	_weapon_base = weapon.position
 	collision_layer = GameManager.L_PLAYERS
@@ -119,7 +102,7 @@ func get_bark_offset() -> float:
 
 
 func display_name() -> String:
-	return NAMES.get(chassis, "MECH")
+	return Chassis.display_name(chassis)
 
 
 func color() -> Color:
@@ -213,8 +196,8 @@ func _physics_process(delta: float) -> void:
 					start_hop(move)
 					break
 	visual.position = _visual_base - Vector2(0, hop_z)
-	# brawler arms hang off the front of the machine (keeps the detailed body visible)
-	weapon.position = _weapon_base + Vector2((5.0 if chassis == "brawler" else 0.0) * facing, -hop_z)
+	# the hardpoint can sit ahead of the body (BRAWLER's arms hang off the front, which keeps the detailed body visible)
+	weapon.position = _weapon_base + Vector2(float(Chassis.def(chassis)["weapon_front"]) * facing, -hop_z)
 	# --- aim
 	if input.aim_explicit:
 		aim_dir = input.aim
@@ -240,7 +223,7 @@ func _physics_process(delta: float) -> void:
 		_steam_t -= delta
 		if _steam_t <= 0.0:
 			_steam_t = 0.05 if wheel.is_venting() else 0.25
-			var vent_pos := global_position + (Vector2(-10 * facing, -26) if chassis == "brawler" else Vector2(0, -26))
+			var vent_pos := global_position + visual.vent_offset()
 			GameManager.arena.fx.steam(vent_pos, 6 if wheel.is_venting() else 2)
 	# --- actions
 	_process_actions(delta)
@@ -397,15 +380,7 @@ func _spit() -> void:
 
 
 func _on_sprint_trail() -> void:
-	var arena = GameManager.arena
-	if chassis == "wheeler":
-		arena.hazards.add("skid", global_position + Vector2(randf_range(-5, 5), 0), 2.0, 6.0)
-		arena.hazards.add("fire", global_position, 6.0, 1.3, 16.0)
-		if randf() < 0.5:
-			arena.fx.fire(global_position, 2)
-	else:
-		arena.fx.steam(global_position + Vector2(-10 * facing, -26), 1)
-		arena.fx.dust(global_position, 1)
+	visual.sprint_trail()
 
 
 func start_hop(dir: Vector2) -> void:
@@ -609,7 +584,7 @@ func _on_spun_out() -> void:
 func _draw() -> void:
 	# soft two-tone ground shadow (shrinks while jetpacking)
 	var shrink := 1.0 - hop_z / (HOP_HEIGHT * 2.0)
-	var rx := (10.0 if chassis == "brawler" else 12.0) * shrink
+	var rx := float(Chassis.def(chassis)["shadow"]) * shrink
 	for dy in range(-2, 3):
 		var hw := roundf(rx * sqrt(maxf(0.0, 1.0 - pow(dy / 2.6, 2.0))))
 		if hw <= 0.0:

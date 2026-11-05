@@ -43,7 +43,7 @@ const SILO_UPGRADE_COST := [0, 60, 120, 200]
 # --- persistent between runs (title screen settings)
 var num_players: int = 1
 var player_devices: Array = ["kbm", "pad0"]
-var p1_chassis: String = "brawler"
+var player_chassis: Array = ["brawler", "wheeler"]   # one Chassis id per pilot slot
 ## Learning Mode level per player slot: 0 off, 1 counting (age 4-6), 2 add/sub to 10 (age 6),
 ## 3 add/sub to 20 (age 7-8). Gates card activation + tower upgrades behind a MathQuiz.
 var learning_levels: Array = [0, 0]

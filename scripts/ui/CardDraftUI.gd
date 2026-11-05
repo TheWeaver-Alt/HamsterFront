@@ -688,37 +688,39 @@ func _draw_card_body(card: Dictionary, r: Rect2, player, is_cursor: bool, chosen
 	draw_rect(hb, tc)
 	draw_rect(Rect2(hb.position, Vector2(hb.size.x, 1)), tc.lightened(0.4))
 	PixelArt.draw_text(self, hb.position + Vector2(2, 2), TIER_SHORT.get(tier, tier.to_upper()), K)
-	# art window with tier icon
-	var art := Rect2(r.position + Vector2(4, 13), Vector2(r.size.x - 8, 18))
+	# the picture is the card (CardFaces): a big drawing of what it does, arrows for how strong it is, a short name
+	var face := CardFaces.of(card)
+	var single := players.size() <= 1
+	# cursed cards have no arrow row of their own, so their picture window gets that room
+	var art_h := (72.0 if single else 52.0) + (12.0 if cursed else 0.0)
+	var art := Rect2(r.position + Vector2(4, 13), Vector2(r.size.x - 8, art_h))
 	draw_rect(art, tc.darkened(0.55))
 	for i in range(0, int(art.size.x), 6):
 		draw_rect(Rect2(art.position + Vector2(i, art.size.y - 3), Vector2(3, 3)), tc.darkened(0.4))
-	var icon := PixelArt.tex("tier_icon_" + tier)
-	var isz := icon.get_size() * 2.0
 	var bob := roundf(sin(_age * 3.0 + r.position.x * 0.1) * 1.0) if not dim else 0.0
-	draw_texture_rect(icon, Rect2(art.get_center() - isz / 2.0 + Vector2(0, bob), isz).abs(), false,
-		Color(1, 1, 1, 1) if not dim else Color(0.5, 0.5, 0.5, 1))
+	var tint := Color(1, 1, 1, 1) if not dim else Color(0.5, 0.5, 0.5, 1)
+	if cursed:
+		_draw_cursed_pair(art, face, single, tint, dim)
+	else:
+		var pic := PixelArt.tex("card_" + String(face["icon"]))
+		var psz := pic.get_size() * (4.0 if single else 3.0)
+		draw_texture_rect(pic, Rect2((art.get_center() - psz / 2.0 + Vector2(0, bob)).round(), psz), false, tint)
 	if cursed and not dim and int(_age * 6.0) % 4 == 0:
 		draw_rect(Rect2(art.position + Vector2(randi_range(2, int(art.size.x) - 4), randi_range(2, 14)), Vector2(1, 1)), PixelArt.C["z"])
-	# name
+	# name: one or two words and nothing else
 	var tx := r.position.x + 4.0
 	var tw := r.size.x - 8.0
 	var ink := K if not dim else Color8(60, 50, 60)
-	var y := _wrap_text(Vector2(tx, art.end.y + 3), card["name"], tw, ink, true)
+	var y := _wrap_text(Vector2(tx, art.end.y + 3), face["short"], tw, ink, true)
 	draw_rect(Rect2(tx, y + 1, tw, 1), tc.darkened(0.2))
-	y += 4
-	var desc_ink := Color8(70, 50, 80) if not dim else Color8(70, 60, 70)
-	y = _wrap_text(Vector2(tx, y), card["desc"], tw, desc_ink, false, r.end.y - (24.0 if card.has("downside") else 9.0))
-	if card.has("downside"):
-		y += 2
-		PixelArt.draw_text(self, Vector2(tx, y), "BUT:", PixelArt.C["R"] if not dim else ink)
-		y = _wrap_text(Vector2(tx, y + 7), card["downside"], tw, Color8(24, 110, 50) if not dim else ink, false, r.end.y - 9.0)
-	# stack counter
+	# how strong: arrows (cursed cards show theirs beside each picture)
+	if not cursed:
+		_draw_arrows(Vector2(r.position.x + r.size.x / 2.0, y + 5), int(face["power"]), dim)
+	# stack counter: one pip per copy you can own
 	var owned := CardDB.times_owned(card, player)
 	var mx := int(card.get("max", 99))
-	if mx < 99:
-		var st := "%d/%d" % [owned, mx]
-		PixelArt.draw_text(self, Vector2(r.end.x - 4 - PixelArt.text_width(st), r.end.y - 8), st, tc.darkened(0.3))
+	if mx > 1 and mx < 99:
+		_draw_pips(Vector2(r.end.x - 4, r.end.y - 7), owned, mini(mx, 5), tc)
 	if card.get("coop", false):
 		PixelArt.draw_text(self, Vector2(r.position.x + 4, r.end.y - 8), "TEAM", tc.darkened(0.3))
 	elif card.has("gmods") and not card.has("mods"):
@@ -726,6 +728,59 @@ func _draw_card_body(card: Dictionary, r: Rect2, player, is_cursor: bool, chosen
 	# shine sweep on rare (synergy / blueprint) and cursed cards
 	if not dim and (tier == "synergy" or tier == "cursed" or tier == "tower"):
 		_draw_shine(r, 0.45 if tier != "tower" else 0.25, Color(0.85, 1.0, 0.7) if cursed else Color(1, 1, 1))
+
+
+## Cursed cards: the good picture on top with up arrows, the bad one below with down arrows.
+func _draw_cursed_pair(art: Rect2, face: Dictionary, single: bool, tint: Color, dim: bool) -> void:
+	var row_h := (art.size.y - 2.0) / 2.0
+	var scale := 2.0 if single else 1.0
+	for k in 2:
+		var good := k == 0
+		var panel := Rect2(art.position + Vector2(1, 1 + k * row_h), Vector2(art.size.x - 2, row_h - 1.0))
+		var base := Color8(24, 70, 30) if good else Color8(84, 26, 32)
+		draw_rect(panel, base if not dim else Color8(40, 40, 40))
+		var pic := PixelArt.tex("card_" + String(face["icon" if good else "bad_icon"]))
+		var psz := pic.get_size() * scale
+		var at := (panel.position + Vector2(3, (panel.size.y - psz.y) / 2.0)).round()
+		draw_texture_rect(pic, Rect2(at, psz), false, tint)
+		var n := int(face["power" if good else "bad_power"])
+		var arrows_at := Vector2(at.x + psz.x + 4.0, panel.position.y + (panel.size.y - 7.0) / 2.0).round()
+		for i in n:
+			_draw_arrow(arrows_at + Vector2(i * 9.0, 0), good, dim)
+
+
+## Up to three arrows centred on `center`; the ones past `n` are drawn as dim ghosts, so "2 of 3" reads at a glance.
+func _draw_arrows(center: Vector2, n: int, dim: bool) -> void:
+	var x0 := roundf(center.x - 12.0)
+	for i in 3:
+		var p := Vector2(x0 + i * 9.0, roundf(center.y))
+		if i < n:
+			_draw_arrow(p, true, dim)
+		else:
+			_arrow_shape(p, true, Color8(150, 140, 150) if not dim else Color8(90, 90, 90))
+
+
+func _draw_arrow(p: Vector2, up: bool, dim: bool) -> void:
+	for d in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
+		_arrow_shape(p + d, up, K)
+	var col: Color = PixelArt.C["Z"] if up else PixelArt.C["r"]
+	_arrow_shape(p, up, col if not dim else col.darkened(0.5))
+
+
+## A 7x7 arrow, up or down.
+func _arrow_shape(p: Vector2, up: bool, col: Color) -> void:
+	var rows := [[3, 1], [2, 3], [1, 5], [0, 7], [2, 3], [2, 3], [2, 3]]
+	for i in rows.size():
+		var yy := i if up else rows.size() - 1 - i
+		draw_rect(Rect2(p + Vector2(rows[i][0], yy), Vector2(rows[i][1], 1)), col)
+
+
+## One square per copy you can own; filled for the copies you already have. `right_bottom` is the pips' right edge.
+func _draw_pips(right_bottom: Vector2, owned: int, count: int, tc: Color) -> void:
+	for i in count:
+		var p := right_bottom + Vector2(-(count - i) * 5.0, 0)
+		draw_rect(Rect2(p - Vector2(1, 1), Vector2(5, 5)), K)
+		draw_rect(Rect2(p, Vector2(3, 3)), tc.lightened(0.2) if i < owned else Color8(210, 200, 190))
 
 
 ## Diagonal light band sweeping across a card every couple of seconds.
@@ -820,7 +875,7 @@ func _draw_hand_labels() -> void:
 			for j in players.size():
 				if j != i and not picked[j]:
 					other_waiting = true
-			var cname: String = hands[i][cursor[i]]["name"]
+			var cname: String = CardFaces.of(hands[i][cursor[i]])["short"]
 			status = ("WAITING FOR P%d..." % (2 if i == 0 else 1)) if other_waiting else "GOT: " + cname
 			scol = PixelArt.C["Z"]
 		elif _state == S.PICK:
@@ -830,6 +885,15 @@ func _draw_hand_labels() -> void:
 				status = "A/D OR MOUSE   [E]/CLICK TAKE"
 			scol = PixelArt.C["y"] if int(_age * 2.0) % 2 == 0 else PixelArt.C["w"]
 		PixelArt.draw_text_centered(self, Vector2(cx, y + 10), status, scol, true)
+		# the old sentences, small and grey, for the grown-up reading along
+		if _state == S.PICK and not picked[i] and not awaiting[i] and not hands[i].is_empty():
+			var cur: Dictionary = hands[i][cursor[i]]
+			var detail := String(cur["desc"])
+			if cur.has("downside"):
+				detail += "  BUT: " + String(cur["downside"])
+			var hand_w := sz.x * 3.0 + 12.0
+			# one hand is centred under the "PICK ONE CARD" prompt, so its line goes below that
+			_wrap_text(Vector2(cx - hand_w / 2.0, y + (36.0 if players.size() <= 1 else 22.0)), detail, hand_w, Color8(150, 152, 170), true)
 		if _star_pop[i] > 0.0:
 			var sy: float = y - 30.0 - (1.4 - _star_pop[i]) * 14.0
 			draw_texture(PixelArt.tex("star"), Vector2(cx - 30, sy - 1))

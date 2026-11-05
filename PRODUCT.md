@@ -51,3 +51,4 @@ Proposed from the README, not yet confirmed by the owner:
 1. A wrong answer is never punished: a gentle "try again" and a counting hint, never a loss.
 2. Every system is readable at a glance in chunky pixel art: telegraphs before danger (burrows, laser sights).
 3. Co-op is the default: synergies reward playing together, and either player can have Learning Mode on alone.
+4. Pictures before words: a child should never need to read a sentence or understand a percentage to make a choice. Cards, puzzles and the handbook lead with a drawing.

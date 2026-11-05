@@ -1,9 +1,9 @@
 extends Control
 ## Title + join screen. Any device presses its confirm button to join (max 2 pilots).
-## P1 presses confirm again to start. With one pilot, left/right picks the chassis.
+## P1 presses confirm again to start. Each pilot picks their own mech with left/right.
 ## TAB / H / F1 (keyboard) or (Y) / SELECT (gamepad) toggles the controls & how-to-play page.
 ## Each joined pilot cycles their LEARNING MODE with up/down; P1's vent button toggles KID mode.
-## CONTRACT: before switching to MainArena set GameManager.num_players, player_devices, p1_chassis,
+## CONTRACT: before switching to MainArena set GameManager.num_players, player_devices, player_chassis,
 ## learning_levels (per slot, 0..3) and difficulty ("normal" | "kid").
 ## Dev/test hook:  godot --path . -- --autostart[=2]
 
@@ -124,10 +124,6 @@ func _process(delta: float) -> void:
 	# P1 controls
 	if inputs.size() > 0:
 		var p1: PlayerInput = inputs[0]
-		if slots.size() == 1 and (p1.just("left") or p1.just("right")):
-			GameManager.p1_chassis = "wheeler" if GameManager.p1_chassis == "brawler" else "brawler"
-			Sfx.play("select")
-			_flash = 0.6
 		if p1.just("vent"):
 			GameManager.difficulty = "normal" if GameManager.difficulty == "kid" else "kid"
 			Sfx.play("upgrade" if GameManager.difficulty == "kid" else "select", 1.2)
@@ -138,6 +134,13 @@ func _process(delta: float) -> void:
 	# learning mode per pilot
 	for i in inputs.size():
 		var li: PlayerInput = inputs[i]
+		if li.just("left") or li.just("right"):
+			var ids := Chassis.available()
+			var at := maxi(ids.find(GameManager.player_chassis[i]), 0)
+			at = (at + (1 if li.just("right") else ids.size() - 1)) % ids.size()
+			GameManager.player_chassis[i] = ids[at]
+			Sfx.play("select")
+			_flash = 0.6
 		if li.just("up"):
 			learn[i] = (int(learn[i]) + 1) % GameManager.LEARNING_NAMES.size()
 			Sfx.play("pickup", 1.0 + learn[i] * 0.2)
@@ -511,13 +514,11 @@ func _draw_slots() -> void:
 		var cx := x + 70.0
 		var y := r.position.y
 		if joined:
-			var chassis := "brawler" if i == 0 else "wheeler"
-			if slots.size() == 1:
-				chassis = GameManager.p1_chassis
+			var chassis := str(GameManager.player_chassis[i])
 			PixelArt.draw_text_centered(self, Vector2(cx, y + 4), "P%d READY!" % (i + 1), col, true)
 			draw_texture(PixelArt.tex("ham_head_%d" % (2 if i == 0 else 4)), Vector2(x + 4, y + 12))
-			PixelArt.draw_text(self, Vector2(x + 34, y + 14), MechPlayer.NAMES[chassis], PixelArt.C["w"])
-			var blurb := "ESPRESSO + DUCT TAPE" if chassis == "brawler" else "BALL ON SPIDER LEGS"
+			PixelArt.draw_text(self, Vector2(x + 34, y + 14), Chassis.display_name(chassis), PixelArt.C["w"])
+			var blurb := String(Chassis.def(chassis)["blurb"])
 			PixelArt.draw_text(self, Vector2(x + 34, y + 22), blurb, PixelArt.C["g"])
 			PixelArt.draw_text(self, Vector2(x + 34, y + 30), PlayerInput.device_label(slots[i]), PixelArt.C["W"])
 			# learning mode: big friendly label with stars
@@ -530,12 +531,8 @@ func _draw_slots() -> void:
 				var bob := roundf(sin(_t * 4.0 + st) * 1.0) if on else 0.0
 				draw_texture(PixelArt.tex("star"), Vector2(x + 106 + st * 10, y + 40 + bob), Color(1, 1, 1, 1) if on else Color(0.3, 0.3, 0.35, 0.8))
 			PixelArt.draw_text_centered(self, Vector2(cx, y + 51), GameManager.LEARNING_NAMES[lv], lcol, true, 12)
-			var hint := "%s: LEARNING" % _ud_glyph(slots[i])
-			if slots.size() == 1:
-				hint += "   < >: MECH"
-			else:
-				hint += "   [%s] LEAVE" % inputs[i].glyph("back")
-			PixelArt.draw_text_centered(self, Vector2(cx, y + 70), hint, PixelArt.C["g"], false)
+			PixelArt.draw_text_centered(self, Vector2(cx, y + 67), "%s: LEARNING   < >: MECH" % _ud_glyph(slots[i]), PixelArt.C["g"], false)
+			PixelArt.draw_text_centered(self, Vector2(cx, y + 75), "[%s] LEAVE" % inputs[i].glyph("back"), PixelArt.C["g"], false)
 		else:
 			var blink := int(_t * 2.0) % 2 == 0
 			if blink:

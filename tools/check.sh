@@ -3,7 +3,7 @@
 # --no-shots --no-mash), then run the bot playtest (tools/SmokeTest.tscn).
 # Fails when Godot exits non-zero, a question fails validation, the playtest never prints its DONE line,
 # or any log has an ERROR.
-# Usage: bash tools/check.sh [smoke args...]   (default: --waves=5 --speed=4 --spawn-all --lob-free --stuck --economy --cards)
+# Usage: bash tools/check.sh [smoke args...]   (default: --waves=5 --speed=4 --spawn-all --lob-free --stuck --economy --cards --shop)
 # Set GODOT to the Godot 4 binary when it isn't on PATH as godot, godot4 or Godot_v4*.
 set -u
 cd "$(dirname "$0")/.."
@@ -27,7 +27,7 @@ if [ -z "$GODOT_BIN" ]; then
 fi
 roster_run=0
 if [ $# -eq 0 ]; then
-	set -- --waves=5 --speed=4 --spawn-all --lob-free --stuck --economy --cards
+	set -- --waves=5 --speed=4 --spawn-all --lob-free --stuck --economy --cards --shop
 	roster_run=1
 fi
 log=$(mktemp)

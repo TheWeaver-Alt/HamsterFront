@@ -3,17 +3,23 @@ extends Control
 ##
 ## CONTRACT (used by MainArena):
 ##   open(players: Array)  shows the draft (tree is paused; this node processes ALWAYS)
-##   signal finished       emitted once every player has picked; CardDB.apply_card() has been
-##                         called exactly once per pick before it fires.
+##   signal finished       emitted once every player is done; CardDB.apply_card() has been
+##                         called exactly once per card taken or bought before it fires.
 ##
 ## Each player gets their own hand of 3 cards (2P: P1 left, P2 right) and browses with
 ## left/right, confirms with confirm/fire/interact. The keyboard+mouse pilot can also hover
 ## and click cards. Sequence: DROP -> DISPENSE -> PICK -> FLOURISH -> LEAVE.
 ##
+## SEEDS (ADR-0002 item 5): each pilot's first card is free. The other cards in their hand then
+## carry a seed price (CardDB.price) and can be bought from the Silo's store, which both pilots
+## share. A pilot is done when they press back (or click DONE), when they have bought everything,
+## or when nothing left in their hand is affordable.
+##
 ## LEARNING MODE: if GameManager.learning_level(player) > 0 and GameManager.arena.math_quiz
 ## exists, confirming a card does NOT apply it yet. The card shows "SOLVE TO ACTIVATE!" and
-## math_quiz.ask(player, level, "card") runs; on math_quiz.solved(player, first_try) the card
-## is applied. Requests are queued so only one quiz runs at a time; the other hand keeps working.
+## math_quiz.ask(player, level, why) runs; on math_quiz.solved(player, first_try) the card
+## is applied. Every card asks one puzzle, free or bought (a bought card is paid for when it is
+## chosen). Requests are queued so only one quiz runs at a time; the other hand keeps working.
 
 signal finished
 
@@ -33,6 +39,12 @@ var cursor: Array = []           # per player: int
 var picked: Array = []           # per player: bool
 var pick_time: Array = []        # per player: seconds since picked (-1 = not yet)
 var awaiting: Array = []         # per player: card chosen, waiting for the maths quiz
+var taken: Array = []            # per player: hand slots taken (the free pick first, then the bought ones)
+var done: Array = []             # per player: finished at the machine
+var _notice: Array = []          # per player: a short red message ("NEED 20 SEEDS") ...
+var _notice_t: Array = []        # ... and how long it still shows
+var _wallet_pop := 0.0           # the "-20" that floats up from the Silo's seed count after a purchase
+var _wallet_spent := 0
 
 var _state := S.IDLE
 var _t := 0.0                    # time in current state
@@ -78,6 +90,11 @@ func open(pls: Array) -> void:
 	picked.clear()
 	pick_time.clear()
 	awaiting.clear()
+	taken.clear()
+	done.clear()
+	_notice.clear()
+	_notice_t.clear()
+	_wallet_pop = 0.0
 	_star_pop.clear()
 	_quiz_queue.clear()
 	_quiz_for = -1
@@ -95,6 +112,10 @@ func open(pls: Array) -> void:
 		picked.append(hand.is_empty())
 		pick_time.append(0.0 if hand.is_empty() else -1.0)
 		awaiting.append(false)
+		taken.append([])
+		done.append(hand.is_empty())
+		_notice.append("")
+		_notice_t.append(0.0)
 		_star_pop.append(0.0)
 		_last_cur.append(cursor[cursor.size() - 1])
 		# swallow whatever is currently held so nothing auto-picks
@@ -194,6 +215,7 @@ func _process(delta: float) -> void:
 	_squash = maxf(0.0, _squash - delta * 5.0)
 	_jiggle = maxf(0.0, _jiggle - delta * 6.0)
 	_freeze_flash = maxf(0.0, _freeze_flash - delta * 3.0)
+	_wallet_pop = maxf(0.0, _wallet_pop - delta * 1.4)
 	_update_particles(delta)
 	_update_card_anims(delta)
 	match _state:
@@ -305,7 +327,8 @@ func _update_pick() -> void:
 	_update_quiz_queue()
 	for i in players.size():
 		_star_pop[i] = maxf(0.0, _star_pop[i] - get_process_delta_time())
-		if picked[i] or awaiting[i]:
+		_notice_t[i] = maxf(0.0, _notice_t[i] - get_process_delta_time())
+		if done[i] or awaiting[i]:
 			continue
 		var inp: PlayerInput = players[i].input
 		inp.update(players[i])
@@ -316,7 +339,7 @@ func _update_pick() -> void:
 		if inp.device == "kbm":
 			for k in n:
 				var r := Rect2(_card_rest(i, k) + Vector2(0, -8), _card_size() + Vector2(0, 8))
-				if r.has_point(mpos):
+				if r.has_point(mpos) and not taken[i].has(k):
 					over = k
 			if over >= 0:
 				_hover = over
@@ -324,21 +347,28 @@ func _update_pick() -> void:
 					cursor[i] = over
 					Sfx.play("select", 1.2, -8.0)
 		if inp.just("left"):
-			cursor[i] = (cursor[i] + n - 1) % n
-			Sfx.play("select")
+			_step_cursor(i, -1)
 		if inp.just("right"):
-			cursor[i] = (cursor[i] + 1) % n
-			Sfx.play("select")
+			_step_cursor(i, 1)
 		var want := inp.just("confirm") or inp.just("fire") or inp.just("interact")
 		if want and inp.device == "kbm" and lmb and over < 0:
 			want = false   # clicked empty space: ignore
 		if lmb_edge and inp.device == "kbm" and over >= 0:
 			cursor[i] = over
 			want = true
+		# once the free card is taken, back (or clicking DONE) ends this pilot's shopping
+		if picked[i] and (inp.just("back") or (lmb_edge and inp.device == "kbm" and _done_rect(i).has_point(mpos))):
+			done[i] = true
+			Sfx.play("select", 0.8, -4.0)
+			continue
 		if want:
-			_request_pick(i)
+			_request_take(i)
+	# a pilot with nothing left they can pay for is finished (the other pilot may have spent the seeds)
+	for i in players.size():
+		if picked[i] and not done[i] and not awaiting[i] and not _can_buy_any(i):
+			done[i] = true
 	var all := true
-	for b in picked:
+	for b in done:
 		if not b:
 			all = false
 	if all:
@@ -361,8 +391,55 @@ func _quiz():
 	return null
 
 
-## Confirm pressed: apply now, or (Learning Mode) queue the maths quiz first.
-func _request_pick(i: int) -> void:
+## True while this pilot still has a card they can pay for.
+func _can_buy_any(i: int) -> bool:
+	for slot in hands[i].size():
+		if not taken[i].has(slot) and GameManager.can_afford(CardDB.price(hands[i][slot])):
+			return true
+	return false
+
+
+## Moves a pilot's cursor to the next card still on the machine (the ones already taken are skipped).
+func _step_cursor(i: int, dir: int, quiet: bool = false) -> void:
+	var n: int = hands[i].size()
+	var slot: int = cursor[i]
+	for _s in n:
+		slot = (slot + dir + n) % n
+		if not taken[i].has(slot):
+			break
+	if slot != cursor[i]:
+		cursor[i] = slot
+		if not quiet:
+			Sfx.play("select")
+
+
+func _done_label(i: int) -> String:
+	return "%s DONE" % players[i].input.glyph("back")
+
+
+## The DONE button, on the pilot's name row at the right-hand end of their hand (it is clickable for the mouse).
+func _done_rect(i: int) -> Rect2:
+	var w := PixelArt.text_width(_done_label(i)) + 10.0
+	var right := _card_rest(i, maxi(0, hands[i].size() - 1)).x + _card_size().x
+	return Rect2(roundf(right - w), _card_rest(i, 0).y + _card_size().y + 5.0, w, 11.0)
+
+
+## Confirm pressed: take the card now, or (Learning Mode) queue the maths quiz first. After the free pick a card is
+## bought: the Silo pays up front, so the other pilot cannot spend the same seeds while a puzzle is being solved.
+func _request_take(i: int) -> void:
+	var slot: int = cursor[i]
+	if taken[i].has(slot):
+		return
+	if picked[i]:
+		var price := CardDB.price(hands[i][slot])
+		if not GameManager.buy_card(price):
+			Sfx.play("deny")
+			_notice[i] = "NEED %d SEEDS" % price
+			_notice_t[i] = 1.2
+			return
+		_wallet_pop = 1.0
+		_wallet_spent = price
+		Sfx.play("bank", 0.7, -3.0)
 	var lvl := GameManager.learning_level(players[i])
 	if lvl > 0 and _quiz() != null:
 		awaiting[i] = true
@@ -372,7 +449,14 @@ func _request_pick(i: int) -> void:
 		for k in 10:
 			_spark(r.get_center(), Vector2.from_angle(randf() * TAU) * randf_range(30, 90), PixelArt.C["y"], 0.4, 60.0)
 	else:
-		_pick(i)
+		_take(i)
+
+
+## The line above a Learning Mode puzzle: the free card says "card", a bought one says what is being bought.
+func _quiz_reason(i: int) -> String:
+	if picked[i]:
+		return "BUY " + String(CardFaces.of(hands[i][cursor[i]])["short"])
+	return "card"
 
 
 func _update_quiz_queue() -> void:
@@ -382,7 +466,7 @@ func _update_quiz_queue() -> void:
 		for i in awaiting.size():
 			if awaiting[i]:
 				awaiting[i] = false
-				_pick(i)
+				_take(i)
 		_quiz_queue.clear()
 		_quiz_for = -1
 		return
@@ -394,12 +478,12 @@ func _update_quiz_queue() -> void:
 			_quiz_for = -1
 			if awaiting[i]:
 				awaiting[i] = false
-				_pick(i)
+				_take(i)
 		return
 	if not _quiz_queue.is_empty() and not q.active:
 		_quiz_for = _quiz_queue.pop_front()
 		_ask_t = 0.0
-		q.ask(players[_quiz_for], GameManager.learning_level(players[_quiz_for]), "card")
+		q.ask(players[_quiz_for], GameManager.learning_level(players[_quiz_for]), _quiz_reason(_quiz_for))
 
 
 func _on_quiz_solved(player, first_try: bool) -> void:
@@ -414,28 +498,45 @@ func _on_quiz_solved(player, first_try: bool) -> void:
 	awaiting[i] = false
 	if first_try:
 		_star_pop[i] = 1.4
-	_pick(i)
+	_take(i)
 
 
-func _pick(i: int) -> void:
-	if picked[i]:
+## Applies the card under the cursor. The first one a pilot takes is their free pick; later ones were paid for in
+## _request_take. Then the cursor moves on, and the pilot is done when nothing is left on the machine.
+func _take(i: int) -> void:
+	var slot: int = cursor[i]
+	if taken[i].has(slot):
 		return
-	picked[i] = true
-	pick_time[i] = 0.0
-	var card: Dictionary = hands[i][cursor[i]]
+	taken[i].append(slot)
+	if not picked[i]:
+		picked[i] = true
+		pick_time[i] = 0.0
+	var card: Dictionary = hands[i][slot]
 	CardDB.apply_card(card, players[i])
 	Sfx.play("card")
 	Sfx.play("bank", 1.3, -6.0)
-	var r := Rect2(_card_rest(i, cursor[i]), _card_size())
-	for k in 14:
+	var r := Rect2(_card_rest(i, slot), _card_size())
+	for n in 14:
 		_spark(r.get_center(), Vector2.from_angle(randf() * TAU) * randf_range(40, 120), CardDB.tier_color(card["tier"]), 0.5, 80.0)
 	if card["tier"] == "cursed":
 		JuiceManager.add_trauma(0.3)
 		Sfx.play("ogre_roar", 1.8, -12.0)
+	if taken[i].size() >= hands[i].size():
+		done[i] = true
+	else:
+		_step_cursor(i, 1, true)
 
 
+## Every card a pilot has taken or bought (the free one first).
 func _is_chosen(c: Dictionary) -> bool:
-	return picked[c["p"]] and cursor[c["p"]] == c["k"]
+	return taken[c["p"]].has(c["k"])
+
+
+func _all_picked() -> bool:
+	for b in picked:
+		if not b:
+			return false
+	return true
 
 
 func _update_flourish(delta: float) -> void:
@@ -453,6 +554,7 @@ func _update_flourish(delta: float) -> void:
 			var corner := Vector2(40, 330) if c["p"] == 0 else Vector2(600, 330)
 			if players.size() == 1:
 				corner = Vector2(40, 330)
+			corner.x += 9.0 * taken[c["p"]].find(c["k"])   # a pilot's cards fan out a little
 			c["pos"] = rest.lerp(corner - _card_size() * 0.1, ee)
 			c["scale"] = lerpf(1.0, 0.15, ee)
 			c["rot"] = ee * 0.6
@@ -533,7 +635,9 @@ func _draw() -> void:
 		draw_rect(Rect2(0, 0, 640, 360), Color(0.8, 0.9, 1.0, 0.35 * _freeze_flash))
 	_draw_machine()
 	if _state == S.PICK:
-		var title := "PICK ONE CARD" if players.size() <= 1 else "PICK ONE CARD EACH"
+		var title := "PICK ONE FREE CARD" if players.size() <= 1 else "PICK ONE FREE CARD EACH"
+		if _all_picked():
+			title = "SPEND SEEDS ON MORE?"
 		PixelArt.draw_text_centered(self, Vector2(320, 300), title, PixelArt.C["y"] if int(_age * 2.0) % 2 == 0 else PixelArt.C["w"], true, 6)
 	elif _state == S.DROP or _state == S.DISPENSE:
 		var a := clampf(_age / 0.3, 0.0, 1.0)
@@ -549,6 +653,7 @@ func _draw() -> void:
 	for c in order:
 		_draw_card_fx(c)
 	_draw_hand_labels()
+	_draw_wallet()
 	for p in _parts:
 		var col: Color = p["col"]
 		col.a *= clampf(p["life"] / p["max"] * 2.0, 0.0, 1.0)
@@ -609,14 +714,18 @@ func _draw_card_fx(c: Dictionary) -> void:
 	var s: float = c["scale"]
 	var pos: Vector2 = c["pos"]
 	var lift := 0.0
-	var is_cursor: bool = _state == S.PICK and cursor[pi] == k and not picked[pi]
+	var chosen := _is_chosen(c)
+	var is_cursor: bool = _state == S.PICK and cursor[pi] == k and not done[pi] and not chosen
 	var is_waiting: bool = _state == S.PICK and cursor[pi] == k and awaiting[pi]
 	if is_cursor:
 		lift = -8.0 + sin(_age * 5.0) * 1.0
-	var chosen := _is_chosen(c)
-	var dim: bool = picked[pi] and not chosen and _state == S.PICK
+	# once the free card is taken, the rest of the hand is for sale: price chip, greyed out when out of reach
+	var for_sale: bool = _state == S.PICK and picked[pi] and not chosen
+	var price := CardDB.price(card) if for_sale else -1
+	var can_pay: bool = price < 0 or GameManager.can_afford(price)
+	var dim: bool = for_sale and (done[pi] or not can_pay)
 	var wob := Vector2.ZERO
-	if card["tier"] == "cursed" and _state == S.PICK and not picked[pi]:
+	if card["tier"] == "cursed" and _state == S.PICK and not chosen and not dim:
 		wob = Vector2(roundf(sin(_age * 9.0 + k) * 1.0), 0)
 	var center := pos + sz * s / 2.0 + Vector2(0, lift) + wob
 	# flip-in: back face while flying / first half of the flip, then the front
@@ -635,7 +744,7 @@ func _draw_card_fx(c: Dictionary) -> void:
 		_draw_card_back(r, CardDB.tier_color(card["tier"]))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		return
-	_draw_card_body(card, r, players[pi], is_cursor, chosen, dim)
+	_draw_card_body(card, r, players[pi], is_cursor, chosen, dim, price, can_pay)
 	if is_cursor:
 		var pc: Color = MechPlayer.PLAYER_COLORS[clampi(pi, 0, 1)]
 		var g := r.grow(2)
@@ -661,11 +770,11 @@ func _draw_card_fx(c: Dictionary) -> void:
 		var pc2: Color = MechPlayer.PLAYER_COLORS[clampi(pi, 0, 1)]
 		var stamp := Rect2(r.position.x + 6, r.position.y + 15, r.size.x - 12, 14)
 		PixelArt.draw_box(self, stamp, pc2.darkened(0.2), K)
-		PixelArt.draw_text_centered(self, Vector2(0, stamp.position.y + 4), "TAKEN!", Color8(255, 248, 231), true)
+		PixelArt.draw_text_centered(self, Vector2(0, stamp.position.y + 4), "TAKEN!" if taken[pi].find(k) == 0 else "BOUGHT!", Color8(255, 248, 231), true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-func _draw_card_body(card: Dictionary, r: Rect2, player, is_cursor: bool, chosen: bool, dim: bool) -> void:
+func _draw_card_body(card: Dictionary, r: Rect2, player, is_cursor: bool, chosen: bool, dim: bool, price: int = -1, can_pay: bool = true) -> void:
 	var tier: String = card["tier"]
 	var tc := CardDB.tier_color(tier)
 	var cursed := tier == "cursed"
@@ -688,6 +797,14 @@ func _draw_card_body(card: Dictionary, r: Rect2, player, is_cursor: bool, chosen
 	draw_rect(hb, tc)
 	draw_rect(Rect2(hb.position, Vector2(hb.size.x, 1)), tc.lightened(0.4))
 	PixelArt.draw_text(self, hb.position + Vector2(2, 2), TIER_SHORT.get(tier, tier.to_upper()), K)
+	# the price, on the right of the header: a seed and a number
+	if price >= 0:
+		var ptxt := str(price)
+		var pw := PixelArt.text_width(ptxt) + 11.0
+		var chip := Rect2(hb.end.x - pw, hb.position.y, pw, hb.size.y)
+		draw_rect(chip, K)
+		draw_texture(PixelArt.tex("seed_icon"), chip.position + Vector2(1, 0))
+		PixelArt.draw_text(self, chip.position + Vector2(9, 2), ptxt, PixelArt.C["y"] if can_pay else PixelArt.C["r"])
 	# the picture is the card (CardFaces): a big drawing of what it does, arrows for how strong it is, a short name
 	var face := CardFaces.of(card)
 	var single := players.size() <= 1
@@ -870,23 +987,31 @@ func _draw_hand_labels() -> void:
 		elif awaiting[i]:
 			status = "SOLVE THE PUZZLE TO ACTIVATE!" if _quiz_for == i else "PUZZLE COMING UP NEXT..."
 			scol = PixelArt.C["y"] if int(_age * 3.0) % 2 == 0 else PixelArt.C["w"]
-		elif picked[i]:
+		elif done[i]:
 			var other_waiting := false
 			for j in players.size():
-				if j != i and not picked[j]:
+				if j != i and not done[j]:
 					other_waiting = true
-			var cname: String = CardFaces.of(hands[i][cursor[i]])["short"]
-			status = ("WAITING FOR P%d..." % (2 if i == 0 else 1)) if other_waiting else "GOT: " + cname
+			var got: String = "GOT %d CARDS" % taken[i].size()
+			if taken[i].size() == 1:
+				got = "GOT: " + String(CardFaces.of(hands[i][taken[i][0]])["short"])
+			status = ("WAITING FOR P%d..." % (2 if i == 0 else 1)) if other_waiting else got
 			scol = PixelArt.C["Z"]
 		elif _state == S.PICK:
 			var inp: PlayerInput = p.input
-			status = "%s/%s BROWSE   [%s] TAKE" % [_glyph_lr(inp, true), _glyph_lr(inp, false), inp.glyph("confirm")]
+			var verb := "BUY" if picked[i] else "TAKE"
+			status = "%s/%s BROWSE   [%s] %s" % [_glyph_lr(inp, true), _glyph_lr(inp, false), inp.glyph("confirm"), verb]
 			if inp.device == "kbm":
-				status = "A/D OR MOUSE   [E]/CLICK TAKE"
+				status = "A/D OR MOUSE   [E]/CLICK " + verb
 			scol = PixelArt.C["y"] if int(_age * 2.0) % 2 == 0 else PixelArt.C["w"]
+			if _notice_t[i] > 0.0:
+				status = String(_notice[i])
+				scol = PixelArt.C["r"]
 		PixelArt.draw_text_centered(self, Vector2(cx, y + 10), status, scol, true)
+		if _state == S.PICK and picked[i] and not done[i] and not awaiting[i]:
+			_draw_done_button(i)
 		# the old sentences, small and grey, for the grown-up reading along
-		if _state == S.PICK and not picked[i] and not awaiting[i] and not hands[i].is_empty():
+		if _state == S.PICK and not done[i] and not awaiting[i] and not hands[i].is_empty():
 			var cur: Dictionary = hands[i][cursor[i]]
 			var detail := String(cur["desc"])
 			if cur.has("downside"):
@@ -898,6 +1023,29 @@ func _draw_hand_labels() -> void:
 			var sy: float = y - 30.0 - (1.4 - _star_pop[i]) * 14.0
 			draw_texture(PixelArt.tex("star"), Vector2(cx - 30, sy - 1))
 			PixelArt.draw_text_outlined(self, Vector2(cx - 18, sy), "+1 MATH STAR!", PixelArt.C["y"])
+
+
+## The DONE button for a pilot that has its free card: a key hint for pads and keys, clickable for the mouse.
+func _draw_done_button(i: int) -> void:
+	var rr := _done_rect(i)
+	var hover: bool = players[i].input.device == "kbm" and rr.has_point(get_global_mouse_position())
+	PixelArt.draw_box(self, rr, PixelArt.C["y"] if hover else Color8(70, 56, 90), K)
+	PixelArt.draw_text_centered(self, Vector2(rr.get_center().x, rr.position.y + 3), _done_label(i), K if hover else Color8(255, 248, 231), false)
+
+
+## The Silo's seeds, top left: what the bought cards are paid from. A "-20" floats up after a purchase.
+func _draw_wallet() -> void:
+	if _state != S.DISPENSE and _state != S.PICK and _state != S.FLOURISH:
+		return
+	var box := Rect2(6, 20, 78, 15)
+	PixelArt.draw_box(self, box, Color8(46, 28, 64), K)
+	PixelArt.draw_text(self, box.position + Vector2(4, 5), "SILO", Color8(190, 180, 210))
+	draw_texture(PixelArt.tex("seed_icon"), box.position + Vector2(29, 3))
+	var txt := str(GameManager.seeds)
+	PixelArt.draw_text(self, box.position + Vector2(39, 5), txt, PixelArt.C["y"])
+	if _wallet_pop > 0.0:
+		var rise := (1.0 - _wallet_pop) * 8.0
+		PixelArt.draw_text_outlined(self, box.position + Vector2(41 + PixelArt.text_width(txt), 5 - rise), "-%d" % _wallet_spent, Color(PixelArt.C["r"], clampf(_wallet_pop * 2.0, 0.0, 1.0)))
 
 
 func _glyph_lr(inp: PlayerInput, left: bool) -> String:

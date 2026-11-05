@@ -12,9 +12,15 @@ extends Node
 ##   fire_rate_mult, pierce, extra_projectiles, pouch_capacity, pouch_slow, pickup_radius,
 ##   heat_rate, heat_decay, heat_weight, alt_damage_mult, alt_size_mult, spit_damage_mult, revive_speed,
 ##   lifesteal, seed_leak, damage_taken, vent_heal, spinout_bonus
+##   (price is not a field: it comes from the card's arrows, see price())
 ## Player flags: no_overheat, forbidden_brie, warp_invert, rat_magnet
 ## Global flags: gatling_flaming, laser_split, decoy_confetti, jumper_cables, blood_brothers,
 ##   buddy_system, shared_cheeks
+
+## What a card costs in seeds once the free pick is used (ADR-0002 item 5). The price follows the arrows on the
+## card's face (CardFaces), so a child sees "more arrows, dearer". Cursed cards are cheap: they hurt as well.
+const PRICE_BY_POWER := {1: 10, 2: 20, 3: 35}
+const PRICE_CURSED := {1: 5, 2: 10, 3: 20}
 
 const TIER_COLORS := {
 	"mod": Color8(150, 220, 255),
@@ -172,6 +178,12 @@ func get_card(id: String) -> Dictionary:
 
 func tier_color(tier: String) -> Color:
 	return TIER_COLORS.get(tier, Color.WHITE)
+
+
+## Seeds this card costs at the vending machine after a pilot's free pick.
+func price(card: Dictionary) -> int:
+	var power := clampi(int(CardFaces.of(card).get("power", 1)), 1, 3)
+	return int(PRICE_CURSED[power] if card.get("tier", "") == "cursed" else PRICE_BY_POWER[power])
 
 
 func _is_global(card: Dictionary) -> bool:

@@ -35,6 +35,7 @@ godot --path .
 - **Build towers** on the wooden pads, and **upgrade** them up to level 3.
 - **Upgrade the Silo** by standing next to it and pressing build (Y on a gamepad). Each level raises the store's capacity (150, 250, 400, then 600 seeds) and the silo stands taller.
 - After each wave, time freezes and a **vending machine** drops from the sky. Each player picks 1 of 3 upgrade cards. Cards are pictures: a big drawing of what the card does, a short name, and one to three arrows for how strong it is, with no percentages to read. Cursed cards show the good thing over the bad thing, each with its own arrows. A small grey line under your hand spells it out for a grown-up.
+- **Your first card is free; the others cost seeds.** Once you have taken your free card, the other two in your hand stay on the machine with a price in the corner (10, 20 or 35 seeds: more arrows, dearer). You buy them from the Silo's seeds, which both players share, so it is a choice between a card and a tower. The Silo's seed count shows in the corner and a "-20" floats off it when you pay. Cards you cannot afford are greyed out. Press back (or click DONE) when you have had enough, or the machine moves on when nothing left in your hand is affordable. With Learning Mode on, every card, free or bought, asks one puzzle.
 
 ### Learning Mode (for young pilots)
 

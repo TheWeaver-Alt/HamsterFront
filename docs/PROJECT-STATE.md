@@ -1,6 +1,6 @@
 # Project state
 
-**Stage:** playable, four mechs · **Last updated:** 2026-11-05 · **Next:** Cards that build and upgrade the mech (bought with seeds), then the handbook and the Workshop.
+**Stage:** playable, four mechs, cards cost seeds · **Last updated:** 2026-11-05 · **Next:** The handbook, then the Workshop's ADR. A person should play the tank, the drone and the card prices first.
 
 <!-- project-kit 1.0.0. This file owns status. /handoff rewrites Now and adds a session-log entry at the top. -->
 
@@ -9,30 +9,31 @@
 - A full run plays end to end: a join screen (keyboard and mouse, P2 keyboard, gamepads), the ¾-view elevated Backyard with three canyon lanes, plateaus and ramps, build and wave phases, the vending-machine card draft after each wave, and game over when the Silo's structure gives out.
 - The Silo is a steel grain silo with a seed-level window ([ADR-0002](adr/0002-silo-hp-and-seed-store.md)). Seeds are the one currency and live in its store, which holds 150 and can be upgraded to 250, 400 and 600 (60, 120 and 200 seeds). A full store stops banking and the rest stays in the cheeks. The HUD shows `seeds/capacity`, and an UPGRADE tag floats above the Silo when a pilot is in reach.
 - Cards are pictures: each of the 37 has a big drawing of what it does, a short name and one to three arrows for how strong it is. Cursed cards stack the good picture over the bad one. The old sentences are a small grey line under the hand for a grown-up. The pause menu and the game-over screen list cards as strips of the same pictures (`scripts/core/CardFaces.gd`, `scripts/art/CardArt.gd`).
+- Cards cost seeds ([ADR-0002](adr/0002-silo-hp-and-seed-store.md) item 5). At the vending machine each pilot's first card is free. The other two in their hand carry a price in the card's corner (10, 20 or 35 seeds by its arrows; cursed cards 5, 10 or 20) and are bought from the Silo's shared store. The Silo's seed count shows in the corner with a "-20" when you pay, cards out of reach are greyed, and a pilot is done on back (or DONE) or when nothing left is affordable. With Learning Mode on, every card asks one puzzle. The prices are a first pass (`CardDB.PRICE_BY_POWER`).
 - Four mechs ([ADR-0003](adr/0003-chassis-roster-and-weight.md)), each pilot picking their own on the title screen (the slot shows its portrait): BRAWLER-01 (robot), WHEELER-X (spider ball), HOWITZER-9 (tank: shells lobbed onto the nearest rat, Stomp) and WHIRLYBIRD-Z (drone: flies over cliffs and towers, seed bombs, Rotor Gust). All have the cheek pouch (bank, cram, spit), wheel heat (sprint, redline, spin-out, vent) and alt attacks, and the Soda-Bottle Jetpack card for hopping cliffs (not offered to the drone). Seed weight is per mech: the tank loses 12% of its speed with full cheeks, the spider ball 25% (and its wheel heats up to 80% faster), the robot 40% and the drone 55% (and it sags lower).
 - The full enemy roster (Clan-Squeakers, Jezzails, Plague-Stink Monks, Doom-Roombas, the Rat-Ogre Bruiser), animated, with death animations and burrow crawl-outs.
 - Five towers with three upgrade levels, a +15% high-ground range bonus and Sugar Rush overdrive.
 - Learning Mode (Counting, Maths to 10, Maths to 20; per player) and KID MODE. About half of each level's puzzles are pictures with almost no words (patterns, odd one out, shapes and shadows, mirror, jigsaw piece, balance scale) and the rest are numbers. A wrong answer is never a penalty: a picture hint starts and the wrong buttons fade.
 - Procedural chiptune music for the title, battle and build phases (ducking; M toggles it), gas, flame and scorch hazards, iris scene transitions, and polished FX, HUD and menus.
 - Export presets for Windows, Linux and macOS. Fullscreen by default, F11 toggles, Esc on the title screen quits.
-- `bash tools/check.sh` fuzzes the Learning Mode question generators (18,000 questions), then runs the two-bot playtest headless on Godot 4.7.2. It clears 5 waves and carries four regressions: a mortar shell outliving its tower (`--lob-free`), a mech wedged in a new tower (`--stuck`), the Silo store rules and the Learning Mode puzzle gate (`--economy`).
+- `bash tools/check.sh` fuzzes the Learning Mode question generators (18,000 questions), then runs the two-bot playtest headless on Godot 4.7.2. It clears 5 waves and carries five regressions: a mortar shell outliving its tower (`--lob-free`), a mech wedged in a new tower (`--stuck`), the Silo store rules and the Learning Mode puzzle gate (`--economy`), and the card prices and the vending machine's rules (`--shop`). A second run plays the tank and the drone (`--mechs`).
 
 ## In progress
 
 - The polish pass (`2689be6` to `bf847bc` on `main`). Its first commit is marked "in progress". Whether more is planned is the owner's call.
 - **Owner's brief of 2026-11-02** (the kid loves the game). Build order is economy, then chassis, then cards, then the Workshop. Done means each piece is playable and `bash tools/check.sh` passes.
-  - Done and merged on 2026-11-05: **visual puzzles** (item 1), **Silo and economy** (item 2, [ADR-0002](adr/0002-silo-hp-and-seed-store.md); mech upgrades paying in seeds comes with the cards rework) and the fix for a **mech wedged in a freshly built tower**.
+  - Done and merged on 2026-11-05: **visual puzzles** (item 1), **Silo and economy** (item 2, [ADR-0002](adr/0002-silo-hp-and-seed-store.md)) and the fix for a **mech wedged in a freshly built tower**.
   3. **Four mechs** ([ADR-0003](adr/0003-chassis-roster-and-weight.md)): done and checked (2026-11-05). All four are selectable. Still open: locking the tank and the drone behind the Workshop, which needs the Workshop's own ADR.
-  4. **Simpler cards**: done as picture-first cards (all 37 redrawn, none cut). Still open: cards that build and upgrade the mech, paid for in seeds (ADR-0002 item 5).
+  4. **Simpler cards**: done as picture-first cards (all 37 redrawn, none cut), and the cards are paid for in seeds (first card free, the rest priced by their arrows; ADR-0002 item 5 done and checked, 2026-11-05).
   5. **Workshop**: Vampire Survivors-style upgrades per mech between runs, saved in a file. The tank and drone unlock here. Needs its own ADR for the save file before any code.
   6. **Two gamepads**: `PlayerInput` and the title screen look like they already support `pad0` and `pad1`. Try it on real hardware.
   7. **Handbook** (an encyclopedia of rats, mechs, towers and cards, picture-first): requested by the owner on 2026-11-05, not started. Most of its data exists (the card pictures, the rat and tower stats, the mech roster). Remembering what a child has discovered needs the save file, so that part waits for the Workshop's ADR.
 
 ## Next
 
-1. Cards that build and upgrade the mech, bought with seeds (finishes ADR-0002 item 5).
-2. The handbook (an encyclopedia of rats, mechs, towers and cards), picture-first.
-3. Write the Workshop's ADR (the save file) before any Workshop code.
+1. The handbook (an encyclopedia of rats, mechs, towers and cards), picture-first.
+2. Write the Workshop's ADR (the save file) before any Workshop code.
+3. A play session by a person (the tank, the drone and the card prices), then tune.
 
 ## Known gaps and risks
 
@@ -40,6 +41,8 @@
 - The tank, the drone and all the new weapon numbers (shell 20 damage, seed bomb 12, stomp, gust) are first-pass and unplayed by a person. The art is first-pass too. The tank and the drone were checked on screenshots in six states each, but nobody has watched the shell arc, the stomp ring or the gust arcs in motion.
 - A hovering drone is blocked by walls, props and the Silo but not by cliffs or towers, and nothing stops it ending a hop-free flight over a cliff face; rats can still reach it with melee. Whether that is too strong needs play.
 - The before/after mech comparison covers idle, cheeks, downed and walking. Firing and the alt attacks are not in it (random spread and particles), so the bots cover their logic and a person has to look at the rest. The capture and diff scripts were scratch work and are not in the repo.
+- The card prices (10/20/35 seeds, cursed 5/10/20) are a first pass and unplayed by a person. Whether a child saves for towers or spends everything on cards, and whether the free card feels free enough, needs play. A full store makes cards cost "nothing" in effect (the seeds would not fit anyway), which may be the right nudge or too generous.
+- Paid cards were not played through the real Learning Mode quiz screen by a person: a bot run with `--learning=2` (13 puzzles asked for 6 free picks and 7 purchases) and a stand-in quiz in `--shop` cover the flow.
 - The economy numbers (capacity 150/250/400/600, upgrade costs 60/120/200, the wave bonus clamped to the store) are a first pass. No real player has tried them yet, and the bots start with 400 seeds, so the cap barely bites in `tools/check.sh`.
 - The new picture puzzles were checked on screenshots for five types (pattern, odd, mirror, scale, piece) at one level. The other types need a look while playing.
 - The two merged worktrees (`.claude/worktrees/visual-puzzles-6c3027` and `.claude/worktrees/magical-satoshi-a50127`) and their branches are still on disk.
@@ -61,6 +64,7 @@
 | 2026-11-02 | Silo keeps its HP and gains a seed store with capacity; seeds are the universal currency | owner | [ADR-0002](adr/0002-silo-hp-and-seed-store.md) |
 | 2026-11-05 | Mechs are a data roster with a script per chassis. The four mechs' roles and numbers are confirmed (the numbers are a first pass). | owner | [ADR-0003](adr/0003-chassis-roster-and-weight.md) |
 | 2026-11-05 | Cards are picture-first and all 37 are redrawn (none cut); no percentages on the card | owner | this file, `PRODUCT.md` principle 4 |
+| 2026-11-05 | At the vending machine the first card is free and the rest of the hand costs seeds from the shared Silo store (price by arrows); every card asks a puzzle in Learning Mode. The owner's reply to the options was "You have to do learning thing to get that free card", read as keeping the free card behind its puzzle (to confirm). | owner | [ADR-0002](adr/0002-silo-hp-and-seed-store.md) item 5 |
 | 2026-11-05 | A handbook of rats, mechs, towers and cards is wanted; discovery tracking waits for the save file | owner | this file |
 | 2026-11-02 | Robot and octopus from the start; tank and drone unlock in the Workshop (to go into the Workshop's ADR) | owner | this file |
 | 2026-11-02 | Build order: economy, chassis, cards, Workshop; visual puzzles in parallel | owner | this file |
@@ -70,6 +74,20 @@
 | 2026-11-02 | GitHub's default branch is `main` | owner | GitHub repo settings |
 
 ## Session log
+
+### 2026-11-05 · Cards cost seeds (ADR-0002 item 5)
+
+- The owner was asked how seeds should buy mech upgrades (one free card and the rest for seeds, every card for seeds, or a separate shop). Their reply: "You have to do learning thing to get that free card ;)". I read it as keeping the free card behind its Learning Mode puzzle and building the first option, with a puzzle on every card. This is recorded in Decisions as "to confirm".
+- Rule: each pilot's first card at the vending machine is free; the rest of their hand costs seeds from the Silo's one shared store. `CardDB.price(card)`: 10, 20 or 35 by the card's arrows (`PRICE_BY_POWER`), cursed cards 5, 10 or 20 (`PRICE_CURSED`). `GameManager.buy_card(price)` pays and counts (`card_purchases`, `card_seeds_spent`).
+- `CardDraftUI` (`scripts/ui/CardDraftUI.gd`): a price chip (seed and number) in each card's header once the free card is taken, greyed with a red chip when out of reach; TAKEN and BOUGHT stamps; the Silo's seed count top left with a "-20" floating off it; a DONE button on the name row (key hint, clickable); "NEED 35 SEEDS" in red when refused; the title reads "PICK ONE FREE CARD", then "SPEND SEEDS ON MORE?". The cursor skips cards already taken. A pilot is done on back or DONE, when everything is taken, or when nothing left is affordable (checked every frame, since the partner may spend the seeds). The draft ends when every pilot is done. A pilot's cards fan into their HUD corner at the end.
+- Learning Mode: every card asks one puzzle. A bought card is paid when chosen (so the partner cannot spend the same seeds while a puzzle is open) and applied when the puzzle is solved; the quiz line reads "BUY <card>".
+- Tests: `--shop` in `tools/SmokeTest.gd` (in the default `tools/check.sh` run) asserts the price table (more arrows cost more, cursed is cheaper, every card priced), `buy_card`, the free first card, a paid second card, a card taken twice, two pilots on one store, a refused card with its message, pilots finishing on their own (and not finishing while something is affordable), and, with a stand-in quiz, one puzzle per card with payment at choosing and application at solving. Mutation test: prices of 0, no charge, no auto-finish and a wrong puzzle line each failed with their own `ERROR: shop:` lines; restored.
+- Bots now buy in every draft; the summary prints `vending machine: cards bought=N seeds spent=N`. A 3-wave bot run with `--learning=2` asked 13 puzzles for 6 free picks and 7 purchases and did not hang.
+- Looked at on screenshots from four short windowed runs (two pilots, then one: before the free pick, after it, after a purchase and after a refusal). The DONE button first sat under the hand, over the HUD bar, so it moved to the name row.
+- Checks: `bash tools/check.sh`: `check: PASS` (quiz fuzz 18000 questions 0 bad; `cards: ok`, `economy: ok`, `shop: ok`, `economy gate: ok`, `lob-free` landed, `stuck: cases=154 wedged=0`, `vending machine: cards bought=13 seeds spent=235`; then the tank and drone run with `mechs: ok`, `cards bought=5 seeds spent=90`).
+- Open: the prices are a first pass and no person has played them (see Known gaps); the free card and the prices need a child's eye. Paid cards were not played through the real quiz screen by a person.
+- Committed on `main`, not pushed.
+- Next: the handbook, then the Workshop's ADR. A play session by a person first would tell more than another round of tests.
 
 ### 2026-11-05 · The tank and the drone (ADR-0003, steps three to five)
 

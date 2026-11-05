@@ -16,7 +16,7 @@ One or two players at the same screen (local co-op). That includes a parent play
 
 ## Product Purpose
 
-**HamsterFront.** A 2D top-down action tower defense roguelite. Two hamsters in scrap-built mechs defend The Great Silo from the Under-Scurriers. The core loop is collecting seeds in a cheek pouch, then banking, cramming or spitting them, building and upgrading towers, and drafting upgrade cards after each wave. With Learning Mode on, a player's card picks and tower upgrades activate by solving a maths puzzle.
+**HamsterFront.** A 2D top-down action tower defense roguelite. Two hamsters in scrap-built mechs defend The Great Silo from the Under-Scurriers. The core loop is collecting seeds in a cheek pouch, then banking, cramming or spitting them, building and upgrading towers, and drafting upgrade cards after each wave (the first card is free, the rest cost seeds). With Learning Mode on, a player's card picks and tower upgrades activate by solving a maths puzzle.
 
 Undecided: what success means.
 

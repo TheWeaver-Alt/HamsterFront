@@ -22,6 +22,9 @@ var _mech_failed := 0
 var _mech_rats: Array = []
 var cards_check := false
 var _cards_done := false
+var shop := false
+var _shop_done := false
+var _shop_failed := 0
 var _economy_done := false
 var _economy_failed := 0
 var _gate_stage := 0
@@ -75,6 +78,8 @@ func _ready() -> void:
 			mechs_check = true
 		elif a == "--cards":
 			cards_check = true
+		elif a == "--shop":
+			shop = true
 		elif a == "--economy":
 			economy = true
 		elif a == "--lob-free":
@@ -131,6 +136,8 @@ func _physics_process(delta: float) -> void:
 			arena.spawn_rat(k, ArenaMap.cell_center(ArenaMap.BURROWS[0]) + Vector2(randf_range(-6, 6), 0), 1.0, 1.0)
 	if cards_check and not _cards_done:
 		_cards_check()
+	if shop and not _shop_done and frame >= 25 and (not stuck or _stuck_stage == 2):
+		_shop_check()
 	if mechs_check and _mech_stage < 3 and frame >= 30 and (not stuck or _stuck_stage == 2):
 		_mechs_step()
 	if economy and not _economy_done and frame >= 20:
@@ -405,6 +412,169 @@ func _cards_check() -> void:
 		print("[smoke] cards: ok (%d cards have a picture, arrows and a short name)" % CardDB.cards.size())
 
 
+func _shop_fail(msg: String) -> void:
+	_shop_failed += 1
+	push_error("shop: " + msg)
+
+
+## A stand-in for the Learning Mode quiz, so the puzzle part of the shop is deterministic: it records what it was
+## asked and is "solved" by the test.
+func _stub_quiz():
+	var s := GDScript.new()
+	s.source_code = "extends Node\nsignal solved(player, first_try)\nvar active := false\nvar asked: Array = []\nfunc ask(p, lvl, why := \"\"):\n\tactive = true\n\tasked.append(why)\n"
+	s.reload()
+	var n := Node.new()
+	n.set_script(s)
+	return n
+
+
+## Opens the card draft for these pilots with fixed hands (instead of random ones) and the cursor on slot 0.
+func _shop_open(ui, pilots: Array, hands: Array) -> void:
+	ui.open(pilots)
+	for i in pilots.size():
+		var hand: Array = []
+		for id in hands[i]:
+			hand.append(CardDB.get_card(id))
+		ui.hands[i] = hand
+		ui.cursor[i] = 0
+		pilots[i].input.bot_held = {}
+
+
+func _shop_close(ui) -> void:
+	ui.visible = false
+	ui._state = 0   # S.IDLE
+	ui._finished_emitted = true
+
+
+## Seeds at the vending machine (--shop, ADR-0002 item 5): prices follow the arrows; the first card is free, the rest
+## cost seeds from one shared store; a card you cannot afford is refused and a pilot with nothing affordable is done;
+## and with Learning Mode on every card asks one puzzle, the seeds being paid when the card is chosen.
+func _shop_check() -> void:
+	_shop_done = true
+	var ui = arena.draft_ui
+	var p1 = GameManager.players[0]
+	var p2 = GameManager.players[1]
+	if ui.visible:
+		_shop_fail("the draft was already open")
+		return
+	# prices: every card has one, more arrows cost more, a cursed card is cheaper than a plain one
+	var last_plain := 0
+	for power in [1, 2, 3]:
+		var plain: int = CardDB.PRICE_BY_POWER[power]
+		if plain <= last_plain:
+			_shop_fail("%d arrows should cost more than %d (%d)" % [power, power - 1, plain])
+		last_plain = plain
+		if int(CardDB.PRICE_CURSED[power]) >= plain:
+			_shop_fail("a cursed card with %d arrows should cost less than a plain one" % power)
+	for card in CardDB.cards:
+		var power := int(CardFaces.of(card)["power"])
+		var want: int = CardDB.PRICE_CURSED[power] if card["tier"] == "cursed" else CardDB.PRICE_BY_POWER[power]
+		if CardDB.price(card) != want or CardDB.price(card) <= 0:
+			_shop_fail("%s costs %d, expected %d" % [card["id"], CardDB.price(card), want])
+	var saved_seeds: int = GameManager.seeds
+	var saved_buys: int = GameManager.card_purchases
+	var saved_spent: int = GameManager.card_seeds_spent
+	var saved_learning: Array = GameManager.learning_levels.duplicate()
+	var saved_quiz = arena.math_quiz
+	GameManager.learning_levels = [0, 0]
+	# the store pays: enough seeds, then too few
+	GameManager.seeds = 50
+	if not GameManager.buy_card(30) or GameManager.seeds != 20:
+		_shop_fail("buy_card(30) from 50 seeds should leave 20, left %d" % GameManager.seeds)
+	if GameManager.buy_card(21) or GameManager.seeds != 20:
+		_shop_fail("buy_card(21) from 20 seeds should be refused and leave 20, left %d" % GameManager.seeds)
+	GameManager.card_purchases = saved_buys
+	GameManager.card_seeds_spent = saved_spent
+	# two pilots, one store
+	var n1: int = p1.owned_cards.get("vampire_sunflower", 0)
+	var n2: int = p1.owned_cards.get("duct_tape", 0)
+	var n3: int = p1.owned_cards.get("jetpack", 0)
+	var m1: int = p2.owned_cards.get("espresso", 0)
+	var m2: int = p2.owned_cards.get("bubble_wrap", 0)
+	var m3: int = p2.owned_cards.get("salted_seeds", 0)
+	GameManager.seeds = 100
+	_shop_open(ui, [p1, p2], [["vampire_sunflower", "duct_tape", "jetpack"], ["espresso", "bubble_wrap", "salted_seeds"]])
+	ui._request_take(0)
+	if GameManager.seeds != 100 or not ui.picked[0] or int(p1.owned_cards.get("vampire_sunflower", 0)) != n1 + 1:
+		_shop_fail("the first card is free: seeds %d (want 100), picked %s" % [GameManager.seeds, ui.picked[0]])
+	if ui.cursor[0] != 1:
+		_shop_fail("after a card the cursor should move to the next one on the machine, it is on %d" % ui.cursor[0])
+	ui._request_take(0)
+	if GameManager.seeds != 80 or int(p1.owned_cards.get("duct_tape", 0)) != n2 + 1:
+		_shop_fail("the second card costs 20: seeds %d (want 80)" % GameManager.seeds)
+	ui.cursor[0] = 0
+	ui._request_take(0)
+	if GameManager.seeds != 80 or int(p1.owned_cards.get("vampire_sunflower", 0)) != n1 + 1:
+		_shop_fail("a card already taken must not be taken or charged again (seeds %d)" % GameManager.seeds)
+	ui.cursor[1] = 0
+	ui._request_take(1)
+	ui._request_take(1)
+	if GameManager.seeds != 60 or int(p2.owned_cards.get("espresso", 0)) != m1 + 1 or int(p2.owned_cards.get("bubble_wrap", 0)) != m2 + 1:
+		_shop_fail("the other pilot pays from the same store: seeds %d (want 60)" % GameManager.seeds)
+	# too poor for the 35-seed card: refused, nothing changes, and that pilot has nothing affordable left
+	GameManager.seeds = 30
+	ui.cursor[0] = 2
+	ui._request_take(0)
+	if GameManager.seeds != 30 or int(p1.owned_cards.get("jetpack", 0)) != n3 or ui.taken[0].size() != 2 or ui._notice_t[0] <= 0.0:
+		_shop_fail("a 35-seed card with 30 seeds must be refused with a message (seeds %d)" % GameManager.seeds)
+	if ui._can_buy_any(0):
+		_shop_fail("with 30 seeds nothing affordable should be left in the first pilot's hand")
+	# pilots finish on their own when nothing is affordable; with seeds to spare they keep shopping
+	GameManager.seeds = 40
+	for pl in [p1, p2]:
+		pl.input.bot_held = {}
+	ui._update_pick()
+	if ui.done[0] or ui.done[1]:
+		_shop_fail("with 40 seeds both pilots still have a card to buy, done=%s" % [ui.done])
+	ui.cursor[1] = 2
+	ui._request_take(1)
+	for pl in [p1, p2]:
+		pl.input.bot_held = {}
+	ui._update_pick()
+	if GameManager.seeds != 20 or not ui.done[0] or not ui.done[1] or int(p2.owned_cards.get("salted_seeds", 0)) != m3 + 1:
+		_shop_fail("with 20 seeds left both pilots should be done (seeds %d, done=%s)" % [GameManager.seeds, ui.done])
+	if GameManager.card_purchases != saved_buys + 3 or GameManager.card_seeds_spent != saved_spent + 60:
+		_shop_fail("three cards for 60 seeds were bought, the counters say %d for %d" % [GameManager.card_purchases - saved_buys, GameManager.card_seeds_spent - saved_spent])
+	_shop_close(ui)
+	# Learning Mode: every card asks one puzzle; a bought card is paid for at once and applied once it is solved
+	var stub = _stub_quiz()
+	add_child(stub)
+	arena.math_quiz = stub
+	GameManager.learning_levels = [2, 2]
+	GameManager.seeds = 100
+	n1 = p1.owned_cards.get("vampire_sunflower", 0)
+	n2 = p1.owned_cards.get("duct_tape", 0)
+	_shop_open(ui, [p1], [["vampire_sunflower", "duct_tape", "jetpack"]])
+	ui._request_take(0)
+	ui._update_quiz_queue()
+	if not ui.awaiting[0] or ui.picked[0] or stub.asked.size() != 1 or GameManager.seeds != 100:
+		_shop_fail("the free card should wait for one puzzle, free of charge (asked %d, seeds %d)" % [stub.asked.size(), GameManager.seeds])
+	stub.active = false
+	stub.solved.emit(p1, true)
+	if not ui.picked[0] or int(p1.owned_cards.get("vampire_sunflower", 0)) != n1 + 1:
+		_shop_fail("solving the puzzle should give the free card")
+	ui._request_take(0)
+	ui._update_quiz_queue()
+	if GameManager.seeds != 80 or int(p1.owned_cards.get("duct_tape", 0)) != n2:
+		_shop_fail("a bought card is paid when chosen and not applied before its puzzle (seeds %d)" % GameManager.seeds)
+	if stub.asked.size() != 2 or not String(stub.asked[1]).begins_with("BUY"):
+		_shop_fail("the bought card should ask its own puzzle, asked %s" % [stub.asked])
+	stub.active = false
+	stub.solved.emit(p1, true)
+	if GameManager.seeds != 80 or int(p1.owned_cards.get("duct_tape", 0)) != n2 + 1:
+		_shop_fail("solving the puzzle should apply the bought card once and not charge again (seeds %d)" % GameManager.seeds)
+	_shop_close(ui)
+	arena.math_quiz = saved_quiz
+	stub.free()
+	GameManager.learning_levels = saved_learning
+	GameManager.seeds = saved_seeds
+	GameManager.seeds_changed.emit(GameManager.seeds)
+	GameManager.card_purchases = saved_buys
+	GameManager.card_seeds_spent = saved_spent
+	if _shop_failed == 0:
+		print("[smoke] shop: ok (prices, free pick, paid cards, shared store, too poor, done on their own, a puzzle per card)")
+
+
 ## The four mechs (--mechs, ADR-0003; run it with --chassis=tank,drone): the weight ordering, flight, the hover sag,
 ## the jetpack exclusion, the heat-weight rule, and that each new weapon and alt attack really hurts a rat.
 func _mech_fail(msg: String) -> void:
@@ -603,6 +773,8 @@ func _stuck_run() -> void:
 func _finish() -> void:
 	if cards_check and not _cards_done:
 		push_error("cards: the check did not run")
+	if shop and not _shop_done:
+		_shop_fail("the check did not run")
 	if mechs_check and _mech_stage != 3:
 		_mech_fail("the check did not finish (stage %d)" % _mech_stage)
 	if economy and not _economy_done:
@@ -623,6 +795,7 @@ func _finish() -> void:
 	print("[smoke] stuck: cases=%d wedged=%d embedded_frames=%d episodes=%d" % [_stuck_cases, _stuck_wedged, _embedded_frames, _embedded_episodes])
 	print("[smoke] jetpack hops=%d math_stars=%d asked=%d" % [_hops, GameManager.math_stars, GameManager.math_asked])
 	print("[smoke] silo level=%d capacity=%d banked_total=%d" % [GameManager.silo_level, GameManager.silo_capacity, GameManager.seeds_banked_total])
+	print("[smoke] vending machine: cards bought=%d seeds spent=%d" % [GameManager.card_purchases, GameManager.card_seeds_spent])
 	for p in GameManager.players:
 		print("[smoke] P%d %s hp=%.0f/%.0f pouch=%d heat=%.0f cards=%s" % [p.player_id, p.chassis, p.hp, p.max_hp(), p.pouch.amount, p.wheel.heat, p.owned_cards])
 	get_tree().quit()

@@ -67,6 +67,8 @@ var gstats: StatBlock
 var owned_cards: Dictionary = {}     # card id -> times taken (any player)
 var math_stars: int = 0              # Learning Mode: correct answers this run
 var math_asked: int = 0
+var card_purchases: int = 0          # cards bought with seeds at the vending machine this run
+var card_seeds_spent: int = 0
 
 # --- live references (set by MainArena)
 var arena = null   # MainArena (untyped: accessed dynamically)
@@ -126,6 +128,8 @@ func new_run() -> void:
 	silo_capacity = SILO_CAPACITY[0]
 	math_stars = 0
 	math_asked = 0
+	card_purchases = 0
+	card_seeds_spent = 0
 	kills = 0
 	seeds_banked_total = 0
 	run_time = 0.0
@@ -208,6 +212,15 @@ func spend(n: int) -> bool:
 		return false
 	seeds -= n
 	seeds_changed.emit(seeds)
+	return true
+
+
+## Pays the Silo for a card bought at the vending machine (the pilots share the one store).
+func buy_card(price: int) -> bool:
+	if not spend(price):
+		return false
+	card_purchases += 1
+	card_seeds_spent += price
 	return true
 
 

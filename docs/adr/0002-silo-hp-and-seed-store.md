@@ -43,4 +43,4 @@ Stored seeds are both the currency and the life. Rats steal from the pile, and t
 2. [x] Redraw the Silo as a silo with a fill gauge (`scripts/arena/Silo.gd`, `MiscArt.silo`).
 3. [x] Show store fill and capacity in the HUD.
 4. [x] Add a Silo capacity upgrade: 60, 120 and 200 seeds, pressing build next to the Silo.
-5. [ ] Make mech upgrades cost seeds (with the cards rework).
+5. [x] Make mech upgrades cost seeds (with the cards rework). Done 2026-11-05: each pilot's first card at the vending machine is free and the rest of their hand is bought with the Silo's seeds (10, 20 or 35 by the card's arrows; cursed cards 5, 10 or 20). First-pass prices.

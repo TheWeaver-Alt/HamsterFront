@@ -89,6 +89,42 @@ func _ready() -> void:
 	add_to_group("towers")
 	_build_t = 0.0
 	_update_head_transform()
+	_clear_mechs()
+
+
+## A pilot builds from up to 14px away, which is inside the tower's solid 14x12 collider. Godot
+## pushes an overlapped mech out the short way, and on a pad with a fence or cliff face a few
+## pixels behind it that is into the wall: the mech ends up wedged between the two for good.
+## So slide every overlapping mech sideways, to the nearest spot that is clear.
+func _clear_mechs() -> void:
+	var box := ($CollisionShape2D.shape as RectangleShape2D).size * 0.5
+	var centre: Vector2 = $CollisionShape2D.global_position
+	for m in GameManager.players:
+		if not is_instance_valid(m):
+			continue
+		var body := m.get_node("CollisionShape2D") as CollisionShape2D
+		var r := (body.shape as CircleShape2D).radius
+		var d := (body.global_position - centre).abs() - box
+		if Vector2(maxf(d.x, 0.0), maxf(d.y, 0.0)).length() + minf(maxf(d.x, d.y), 0.0) >= r:
+			continue
+		var side := signf(body.global_position.x - centre.x)
+		if side == 0.0:
+			side = 1.0
+		var reach := Vector2(box.x + r + 1.0, box.y + r + 1.0)
+		var q := PhysicsShapeQueryParameters2D.new()
+		q.shape = body.shape
+		q.collision_mask = GameManager.L_WORLD | GameManager.L_TOWERS | GameManager.L_CLIFF
+		q.exclude = [m.get_rid()]
+		for step: Vector2 in [Vector2(side, 0), Vector2(-side, 0), Vector2(0, -1), Vector2(0, 1)]:
+			var dest := body.global_position
+			if step.x != 0.0:
+				dest.x = centre.x + step.x * reach.x
+			else:
+				dest.y = centre.y + step.y * reach.y
+			q.transform = Transform2D(0.0, dest)
+			if get_world_2d().direct_space_state.intersect_shape(q, 1).is_empty():
+				m.global_position += dest - body.global_position
+				break
 
 
 func base_max_hp() -> float:

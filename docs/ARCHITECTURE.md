@@ -20,7 +20,7 @@ Godot 4.3+, GDScript, GL Compatibility renderer. Base viewport 640x360, `canvas_
 - `MainArena.tscn` — `TileMapLayer` ground, `World` (y-sorted entities), managers, camera, `HUDLayer`, `DraftLayer`, `OverlayLayer`.
 - `MechPlayer.tscn` — `CharacterBody2D` + `CheekPouchComponent`, `WheelHeatComponent`, `WeaponMount`, `Visual`, `Overlay`.
 - `RatEnemy.tscn` — `CharacterBody2D`; behaviour from a `RatBrain` in `scripts/enemies/brains/<Kind>Brain.gd`.
-- `TowerBase.tscn` — `StaticBody2D` + `Range` (`Area2D`) + `OverchargeTimer`; behaviour from a `TowerBrain` in `scripts/towers/brains/<Kind>Brain.gd`.
+- `TowerBase.tscn` — `StaticBody2D` (solid 14x12 collider on `L_TOWERS`) + `Range` (`Area2D`) + `OverchargeTimer`; behaviour from a `TowerBrain` in `scripts/towers/brains/<Kind>Brain.gd`. A pilot builds from up to 14px away, inside that collider, so a new tower slides any overlapping mech sideways to clear ground (`TowerBase._clear_mechs`); otherwise a pad with a fence or cliff face just behind it leaves the mech wedged for good.
 
 ## Arena systems (`scripts/arena`, `scripts/systems`)
 
@@ -63,4 +63,4 @@ Seeds are the one currency: towers, tower upgrades and Silo upgrades. They live 
 ## Dev tools (`/tools`)
 
 - `ArtPreview.tscn` — renders every sprite + font sample to `screenshots/art_preview.png`.
-- `SmokeTest.tscn` — two bot pilots play N waves: `godot --path . res://tools/SmokeTest.tscn -- --waves=4 --speed=3 [--shots] [--spawn-all] [--lob-free] [--economy]`. `--lob-free` fires a mortar shell and destroys its tower mid-flight (regression for a freed lambda capture). `--economy` asserts the Silo store rules (see Economy). `bash tools/check.sh` wraps import plus this run and fails on any `ERROR:` line.
+- `SmokeTest.tscn` — two bot pilots play N waves: `godot --path . res://tools/SmokeTest.tscn -- --waves=4 --speed=3 [--shots] [--spawn-all] [--lob-free] [--stuck] [--economy]`. `--lob-free` fires a mortar shell and destroys its tower mid-flight (regression for a freed lambda capture). `--stuck` builds a tower on every pad with a pilot standing at several spots within build range and fails if the mech is left sunk in the tower or unable to walk away (regression for a mech wedged between a new tower and a fence or cliff); the summary line `stuck: cases=N wedged=N embedded_frames=N episodes=N` also counts any frame a mech overlaps a tower during normal bot play. `--economy` asserts the Silo store rules (see Economy). `bash tools/check.sh` wraps import plus this run and fails on any `ERROR:` line.

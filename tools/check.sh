@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Headless check: import the project, then run the bot playtest (tools/SmokeTest.tscn).
-# Fails when Godot exits non-zero, the playtest never prints its DONE line, or either log has an ERROR.
+# Headless check: import the project, fuzz the Learning Mode questions (tools/MathQuizPreview.tscn,
+# --no-shots --no-mash), then run the bot playtest (tools/SmokeTest.tscn).
+# Fails when Godot exits non-zero, a question fails validation, the playtest never prints its DONE line,
+# or any log has an ERROR.
 # Usage: bash tools/check.sh [smoke args...]   (default: --waves=5 --speed=4 --spawn-all --lob-free)
 # Set GODOT to the Godot 4 binary when it isn't on PATH as godot, godot4 or Godot_v4*.
 set -u
@@ -34,6 +36,17 @@ status=$?
 if [ $status -ne 0 ] || grep -q -E "$ERR" "$log"; then
 	grep -A4 -E "$ERR" "$log"
 	echo "check: FAIL import (exit=$status)"
+	exit 1
+fi
+
+# Learning Mode questions: every type must validate against its own picture (a few seconds, no window).
+"$GODOT_BIN" --headless --path . res://tools/MathQuizPreview.tscn -- --no-shots --no-mash >"$log" 2>&1
+status=$?
+grep -E '^\[quiz\] (validator|fuzz)' "$log"
+errors=$(grep -c -E "$ERR" "$log")
+if [ $status -ne 0 ] || [ "$errors" -gt 0 ] || ! grep -q -E '^\[quiz\] fuzz: .* 0 bad' "$log"; then
+	grep -A4 -E "$ERR" "$log"
+	echo "check: FAIL quiz questions (exit=$status, errors=$errors)"
 	exit 1
 fi
 

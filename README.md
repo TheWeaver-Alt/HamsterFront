@@ -45,7 +45,7 @@ Each player can turn on **Learning Mode** on the title screen (up/down on their 
 | Maths to 10 | age 6 | add and take away within 10 with pictures, missing number, doubles |
 | Maths to 20 | ages 7–8 | add and take away within 20, missing addend, counting in 2s and 5s, patterns |
 
-Shapes and pattern puzzles are mixed in at every level. With Learning Mode on, that player's **card picks and tower upgrades activate by solving a puzzle**. Time freezes while they think, and there are big numbers, pictures to count and three answer bubbles. A wrong answer only brings a gentle "try again" and a counting hint. Correct answers earn **math stars** and +5 seeds. Learning Mode is set per player, so a parent and child can play co-op with it on for just one of them.
+About half the puzzles at every level are pictures with hardly any words: continue a pattern, odd one out, find the same shape or its shadow, biggest and smallest, which size fits the gap, mirror a picture, fit a jigsaw piece, which side of a balance is heavier. With Learning Mode on, that player's **card picks and tower upgrades activate by solving a puzzle**. Time freezes while they think, and there are big numbers, pictures to count and three answer bubbles. A wrong answer only brings a gentle "try again" and a picture hint (counting along, a flashing frame, a guide line), and the wrong bubble fades so the choices shrink. Correct answers earn **math stars** and +5 seeds. Learning Mode is set per player, so a parent and child can play co-op with it on for just one of them.
 
 **KID MODE** (P1 toggles it on the title screen with the vent button) gives a tougher Silo, slower and weaker rats, and more starting seeds.
 

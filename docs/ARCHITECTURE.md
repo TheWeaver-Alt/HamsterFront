@@ -36,8 +36,14 @@ Godot 4.3+, GDScript, GL Compatibility renderer. Base viewport 640x360, `canvas_
 ## Learning Mode
 
 - `GameManager.learning_levels[player_slot]` (0 off .. 3), `GameManager.learning_level(player)`, `math_stars`, `math_asked`, `difficulty` (`"normal"`/`"kid"`).
-- `MathQuestions.make(level, rng)` returns `{type, prompt, answer, choices[3], visual, hint}`.
+- `MathQuestions.make(level, rng)` returns `{type, prompt, answer, choices[3], visual, hint}`. About half of each level is picture puzzles and the rest numbers: counting, adding, taking away, missing numbers. `prompt` and `hint` are a few words (at most 18 characters); the picture does the explaining.
+  - Number types: `count`, `more`, `next`, `skip`, `add`, `double`, `sub`, `missing`, `compare`.
+  - Picture types: `shape`, `pattern` (ABAB, AAB, ABC in colours or shapes), `odd` (odd one out), `same` (match, or match a shadow), `bigger` (biggest, smallest or middle of discs, bars, towers), `order` (which size fits the gap), `mirror` (symmetry), `piece` (jigsaw), `scale` (balance), `chain` (patterns with a gap in the middle, two changing things, growing dot cards).
+  - `choices` are the numbers for number questions. For picture questions they are an index into `visual["options"]` (or a colour code for `mirror`) so the buttons can draw pictures; `scale` keeps its buttons in order (left heavier, level, right heavier).
+  - `visual["kind"]` picks the picture and `visual["button"]` the button face; the full list and the glyph format are in the header of `scripts/core/MathQuestions.gd`, which owns them.
+  - `MathQuestions.validate(q)` recomputes the answer from the picture and returns `""` when the question is sound. It is the unit test for the generators (see Dev tools).
 - `MathQuiz` (Control on `MainArena/QuizLayer`, exposed as `arena.math_quiz`): `ask(player, level, reason)`, `signal solved(player, first_try)`. Used by `CardDraftUI` (card activation) and `MainArena.try_upgrade` (tower upgrades; the tree is paused while asking).
+  - A wrong answer is never a penalty: the button is washed out (the choices shrink), the helper says "TRY AGAIN!", and a picture hint starts (counting along, a pulsing frame, a guide line, totals under the scale). After two misses the one button left is highlighted and pre-selected, so button-mashing always finishes.
 
 ## Stats & cards
 
@@ -53,4 +59,5 @@ Godot 4.3+, GDScript, GL Compatibility renderer. Base viewport 640x360, `canvas_
 ## Dev tools (`/tools`)
 
 - `ArtPreview.tscn` — renders every sprite + font sample to `screenshots/art_preview.png`.
-- `SmokeTest.tscn` — two bot pilots play N waves: `godot --path . res://tools/SmokeTest.tscn -- --waves=4 --speed=3 [--shots] [--spawn-all] [--lob-free]`. `--lob-free` fires a mortar shell and destroys its tower mid-flight (regression for a freed lambda capture). `bash tools/check.sh` wraps import plus this run and fails on any `ERROR:` line.
+- `MathQuizPreview.tscn` — `godot --path . res://tools/MathQuizPreview.tscn` (a window, not `--headless`, since it takes screenshots). It checks `MathQuestions.validate` against corrupted questions and fuzzes it over 400 questions of every type at every level, saves `screenshots/quiz_L<level>_<type>_{ask,wrong,hint,highlight,correct}.png`, then runs a button-mashing bot that must finish every type at every level. Options: `-- --only=odd,mirror`, `--no-shots`, `--no-mash`.
+- `SmokeTest.tscn` — two bot pilots play N waves: `godot --path . res://tools/SmokeTest.tscn -- --waves=4 --speed=3 [--shots] [--spawn-all] [--lob-free]`. `--lob-free` fires a mortar shell and destroys its tower mid-flight (regression for a freed lambda capture). `bash tools/check.sh` wraps the import, the Learning Mode question fuzz (`MathQuizPreview.tscn -- --no-shots --no-mash`, headless, a few seconds) and this run, and fails on any `ERROR:` line.

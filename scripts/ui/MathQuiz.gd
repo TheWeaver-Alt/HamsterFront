@@ -10,8 +10,10 @@ extends Control
 ## the caller usually pauses the tree. Polls only the asked player's PlayerInput
 ## (left/right + confirm/fire/interact); the keyboard+mouse pilot can also hover/click.
 ## If another player asks while one quiz is showing, the request is queued.
-## Never punishes: wrong answers wobble, show a counting hint, and after 3 misses the right
-## answer is highlighted and pre-selected so even button-mashing finishes.
+## Never punishes: a wrong answer wobbles, greys that button out (so the choices shrink) and
+## starts a picture hint (counting along, a highlight, a guide line); after 2 misses the one
+## button left is highlighted and pre-selected so even button-mashing finishes.
+## Words are kept to a few: the prompt and the helper's bubble are short, the pictures do the talking.
 
 signal solved(player, first_try: bool)
 
@@ -47,6 +49,7 @@ var _hint_t := -1.0                           # >= 0 while the counting hint pla
 var _hint_shown := 0
 var _wobble := 0.0
 var _wrong_choice := -1
+var _tried: Array = [false, false, false]     # buttons already ruled out by a wrong answer
 var _press_t := 0.0
 var _first_try := true
 var _bubble := ""
@@ -97,6 +100,7 @@ func _start(p, lvl: int, why: String) -> void:
 	_hint_shown = 0
 	_wobble = 0.0
 	_wrong_choice = -1
+	_tried = [false, false, false]
 	_press_t = 0.0
 	_first_try = true
 	_plus_t = -1.0
@@ -197,7 +201,7 @@ func _handle_input() -> void:
 		var moved := m.distance_to(_mouse_prev) > 0.5
 		_mouse_prev = m
 		for i in 3:
-			if _btn_rect(i).has_point(m):
+			if _btn_rect(i).has_point(m) and not _tried[i]:
 				if moved and sel != i:
 					sel = i
 					Sfx.play("select", 1.2, -8.0)
@@ -208,10 +212,10 @@ func _handle_input() -> void:
 					return
 	if can_answer:
 		if _edge(held, "left"):
-			sel = (sel + 2) % 3
+			sel = _step_sel(-1)
 			Sfx.play("select")
 		if _edge(held, "right"):
-			sel = (sel + 1) % 3
+			sel = _step_sel(1)
 			Sfx.play("select")
 		var confirm := _edge(held, "confirm") or _edge(held, "fire") or _edge(held, "interact")
 		if confirm and not (_uses_mouse and lmb):
@@ -223,7 +227,21 @@ func _edge(held: Dictionary, a: String) -> bool:
 	return bool(held.get(a, false)) and not bool(_prev.get(a, false))
 
 
+## Next button in `dir` that hasn't been ruled out (stays put once the answer is showing).
+func _step_sel(dir: int) -> int:
+	if wrong_count >= 2:
+		return sel
+	var s := sel
+	for k in 3:
+		s = (s + dir + 3) % 3
+		if not _tried[s]:
+			return s
+	return sel
+
+
 func _answer(i: int) -> void:
+	if _tried[i]:
+		return
 	var choices: Array = q["choices"]
 	var choice: int = int(choices[i])
 	_press_t = 0.12
@@ -242,6 +260,7 @@ func _answer(i: int) -> void:
 	else:
 		wrong_count += 1
 		_first_try = false
+		_tried[i] = true
 		_wrong_choice = i
 		_wobble = 1.0
 		_lock_t = 0.35
@@ -249,9 +268,11 @@ func _answer(i: int) -> void:
 		_bubble = "TRY AGAIN! " + String(q.get("hint", ""))
 		if _hint_t < 0.0:
 			_hint_t = 0.0
-		if wrong_count >= 3:
+		sel = i
+		sel = _step_sel(1)
+		if wrong_count >= 2:
 			sel = _correct_index()
-			_bubble = "THIS ONE! " + String(q.get("hint", ""))
+			_bubble = "THIS ONE!"
 
 
 func _correct_index() -> int:
@@ -277,7 +298,9 @@ func _hint_total() -> int:
 			return 3
 		"pattern":
 			return (v["items"] as Array).size()
-	return 9
+		"scale":
+			return 2
+	return 3
 
 
 # ------------------------------------------------------------------ confetti
@@ -628,6 +651,22 @@ func _draw_picture(dy: float) -> void:
 			_draw_sequence(v, area, qmark, qcol)
 		"pattern":
 			_draw_pattern(v, area, qcol)
+		"odd":
+			_draw_odd(v, area)
+		"same":
+			_draw_same(v, area)
+		"sizes":
+			_draw_sizes(v, area)
+		"order":
+			_draw_order(v, area, qcol)
+		"mirror":
+			_draw_mirror(v, area, qcol)
+		"piece":
+			_draw_piece(v, area, qcol)
+		"scale":
+			_draw_scale(v, area)
+		"chain":
+			_draw_chain(v, area, qcol)
 		_:
 			# piles / numbers / shape: a big thinking hamster fills the picture area
 			var hz := PixelArt.tex("ham_head_%d" % (6 if state == "correct" else 1))
@@ -741,6 +780,420 @@ func _draw_pattern(v: Dictionary, area: Rect2, qcol: Color) -> void:
 			draw_rect(Rect2(roundf(b) - 2, by - 3, 2, 3), col)
 
 
+# ------------------------------------------------------------------ picture puzzles
+# Every picture is drawn from the question's `visual` data (see MathQuestions). `area` is PIC with
+# the pop-in offset already applied; a pulsing frame / guide line / totals appear once `_hint_t` >= 0.
+
+func _col(code: int) -> Color:
+	var key: String = COLOR_KEYS.get(code, "w")
+	return PixelArt.C[key]
+
+
+func _pulse(col: Color) -> Color:
+	return col.lerp(Color.WHITE, 0.4 * (0.5 + 0.5 * sin(_t * 8.0)))
+
+
+func _frame(r: Rect2, col: Color, th: float = 2.0) -> void:
+	r = Rect2(r.position.round(), r.size.round())
+	draw_rect(Rect2(r.position, Vector2(r.size.x, th)), col)
+	draw_rect(Rect2(r.position + Vector2(0, r.size.y - th), Vector2(r.size.x, th)), col)
+	draw_rect(Rect2(r.position, Vector2(th, r.size.y)), col)
+	draw_rect(Rect2(r.position + Vector2(r.size.x - th, 0), Vector2(th, r.size.y)), col)
+
+
+## Pulsing yellow frame with a dark edge on both sides, so it shows on any colour.
+func _hl(r: Rect2) -> void:
+	_frame(r.grow(3), PixelArt.C["k"], 1.0)
+	_frame(r.grow(2), _pulse(PixelArt.C["y"]), 2.0)
+	_frame(r, PixelArt.C["k"], 1.0)
+
+
+func _arrow_down(at: Vector2, col: Color) -> void:
+	var pts := PackedVector2Array([Vector2(at.x - 7, at.y), Vector2(at.x + 7, at.y), Vector2(at.x, at.y + 8)])
+	_poly_outlined(pts, col, PixelArt.C["k"])
+
+
+func _pix(ch: String) -> Color:
+	if ch == ".":
+		return PixelArt.C["a"].lightened(0.3)
+	var c: Color = PixelArt.C.get(ch, PixelArt.C["w"])
+	return c
+
+
+## Dots laid out like a dice face, rows centred.
+func _draw_dots(n: int, c: Vector2, sp: float, r: float, col: Color) -> void:
+	var per := 2 if n == 4 else 3
+	var rows := int(ceil(n / float(per)))
+	for i in n:
+		var row := int(i / per)
+		var in_row := mini(per, n - row * per)
+		var x := c.x + (i % per - (in_row - 1) / 2.0) * sp
+		var y := c.y + (row - (rows - 1) / 2.0) * sp
+		PixelArt.draw_disk(self, Vector2(x, y), r + 1.0, PixelArt.C["k"])
+		PixelArt.draw_disk(self, Vector2(x, y), r, col)
+
+
+## One thing from a puzzle: a coloured shape, a sprite, a bar or a dot card (see MathQuestions).
+## `shadow` paints it as a dark silhouette.
+func _draw_glyph(g: Dictionary, c: Vector2, shadow: bool = false, zoom: float = 1.0) -> void:
+	c = c.round()
+	var k: Color = PixelArt.C["k"]
+	var dark := Color8(70, 56, 86)
+	if g.has("icon"):
+		var tex := _icon_tex(String(g["icon"]))
+		var sz := tex.get_size()
+		var sc := maxi(1, roundi(30.0 * zoom / sz.y))
+		while sc > 1 and sz.x * sc > 64.0 * zoom:
+			sc -= 1
+		draw_texture_rect(tex, Rect2((c - sz * float(sc) / 2.0).round(), sz * float(sc)), false,
+			Color(0.28, 0.22, 0.34) if shadow else Color.WHITE)
+	elif g.has("bar"):
+		var vertical := bool(g.get("v", false))
+		var size := Vector2(14.0, float(g["bar"])) if vertical else Vector2(float(g["bar"]), 14.0)
+		var br := Rect2((c - size / 2.0).round(), size)
+		var col: Color = dark if shadow else _col(int(g.get("c", 1)))
+		PixelArt.draw_box(self, br, col, k)
+		var shine := Vector2(2, br.size.y - 4) if vertical else Vector2(br.size.x - 4, 2)
+		draw_rect(Rect2(br.position + Vector2(2, 2), shine), col.lightened(0.4))
+	elif g.has("n"):
+		_draw_dots(int(g["n"]), c, 11.0 * zoom, 3.0 * zoom, _col(int(g.get("c", 1))))
+	else:
+		var col2: Color = dark if shadow else _col(int(g.get("c", 1)))
+		_draw_shape(int(g.get("s", 1)), c, float(g.get("z", 14)), col2)
+
+
+## A hole in a row: a pulsing "?" box in the player's colour (or the answer once it is solved).
+func _draw_hole(r: Rect2, qcol: Color, size: int = 30) -> void:
+	if state == "correct":
+		PixelArt.draw_box(self, r, _tint(PixelArt.C["Z"]), PixelArt.C["Z"])
+		return
+	PixelArt.draw_box(self, r, _tint(qcol), qcol)
+	_text_o1(Vector2(r.get_center().x, r.position.y + r.size.y / 2.0 - size * 5.0 / 12.0), "?", qcol, size, true)
+
+
+## Odd one out: tap the picture that is different. Hint: a pulsing frame and an arrow on it.
+func _draw_odd(v: Dictionary, area: Rect2) -> void:
+	var items: Array = v["items"]
+	var oi := int(v["odd"])
+	var n := items.size()
+	var tw := 66.0
+	var gap := 12.0
+	var x0 := 320.0 - (n * tw + (n - 1) * gap) / 2.0
+	var y := area.position.y + 47.0
+	for i in n:
+		var r := Rect2(roundf(x0 + i * (tw + gap)), y, tw, tw)
+		var is_odd := i == oi
+		if state == "correct" and is_odd:
+			r.position.y -= roundf(absf(sin(_state_t * 11.0)) * 6.0 * maxf(0.0, 1.0 - _state_t))
+		PixelArt.draw_box(self, r, Color8(255, 240, 200), PixelArt.C["k"])
+		_draw_glyph(items[i], r.get_center())
+		if is_odd and state == "correct":
+			_frame(r.grow(3), PixelArt.C["Z"], 3.0)
+		elif is_odd and _hint_t >= 0.0:
+			_hl(r.grow(1))
+			_arrow_down(Vector2(r.get_center().x, r.position.y - 16.0 + roundf(sin(_t * 8.0) * 2.0)), _pcolor())
+
+
+## Find the same: one big picture in the middle, the buttons hold the candidates.
+func _draw_same(v: Dictionary, area: Rect2) -> void:
+	var r := Rect2(268.0, area.position.y + 26.0, 104.0, 104.0)
+	PixelArt.draw_box(self, r.grow(3), _pcolor(), PixelArt.C["k"])
+	PixelArt.draw_box(self, r, Color8(255, 240, 200), PixelArt.C["k"])
+	var bob := 0.0
+	if state == "correct":
+		bob = -absf(sin(_state_t * 11.0)) * 5.0
+	_draw_glyph(v["target"], r.get_center() + Vector2(0, bob))
+	if _hint_t >= 0.0 and state != "correct":
+		_hl(r.grow(5))
+
+
+## Biggest / smallest / middle. Before a miss: three grey ghosts and an arrow showing which one we
+## want (no words needed). After a miss: the real three lined up with guide lines.
+func _draw_sizes(v: Dictionary, area: Rect2) -> void:
+	var options: Array = v["options"]
+	var mode := String(v["mode"])
+	var ask := String(v["ask"])
+	var k: Color = PixelArt.C["k"]
+	var pc := _pcolor()
+	if _hint_t < 0.0 and state != "correct":
+		var want := 2 if ask == "biggest" else (0 if ask == "smallest" else 1)
+		var base := area.position.y + 108.0
+		for i in 3:
+			var cx := 320.0 + (i - 1) * 120.0
+			var s: float = [0.45, 0.72, 1.0][i]
+			var top := base
+			match mode:
+				"disk":
+					var rr := 24.0 * s
+					PixelArt.draw_disk(self, Vector2(cx, base - rr), rr + 1.0, PixelArt.C["g"])
+					PixelArt.draw_disk(self, Vector2(cx, base - rr), rr, PixelArt.C["W"])
+					top = base - rr * 2.0
+				"bar":
+					var ln := roundf(100.0 * s)
+					PixelArt.draw_box(self, Rect2(roundf(cx - ln / 2.0), base - 14.0, ln, 14.0), PixelArt.C["W"], PixelArt.C["g"])
+					top = base - 14.0
+				_:
+					var ht := roundf(62.0 * s)
+					PixelArt.draw_box(self, Rect2(roundf(cx - 7.0), base - ht, 14.0, ht), PixelArt.C["W"], PixelArt.C["g"])
+					top = base - ht
+			if i == want:
+				_arrow_down(Vector2(cx, top - 20.0 + roundf(sin(_t * 8.0) * 2.0)), pc)
+		return
+	var choices: Array = q["choices"]
+	var vals: Array = []
+	for i in 3:
+		var g: Dictionary = options[int(choices[i])]
+		vals.append(float(g["bar"]) if g.has("bar") else float(g["z"]))
+	var guide := Color(pc, 0.85)
+	if mode == "bar":
+		var x0 := 270.0
+		for i in 3:
+			var g: Dictionary = options[int(choices[i])]
+			var cy := area.position.y + 56.0 + i * 38.0
+			_draw_glyph(g, Vector2(x0 + float(vals[i]) / 2.0, cy))
+			draw_dashed_line(Vector2(x0 + float(vals[i]), cy - 22.0), Vector2(x0 + float(vals[i]), cy + 22.0), guide, 2.0, 3.0)
+		draw_rect(Rect2(x0 - 2.0, area.position.y + 30.0, 2, 120), k)
+	else:
+		var base := area.position.y + 122.0
+		for i in 3:
+			var g: Dictionary = options[int(choices[i])]
+			var cx := 320.0 + (i - 1) * 130.0
+			var h := float(vals[i]) * (2.0 if mode == "disk" else 1.0)
+			_draw_glyph(g, Vector2(cx, base - h / 2.0))
+			draw_dashed_line(Vector2(110.0, base - h), Vector2(530.0, base - h), guide, 1.0, 3.0)
+		draw_rect(Rect2(110, base, 420, 2), k)
+
+
+## Sizes in even steps with one gap. Hint: a dashed slope along the tops shows where the gap's top is.
+func _draw_order(v: Dictionary, area: Rect2, qcol: Color) -> void:
+	var items: Array = v["items"]
+	var hole := int(v["hole"])
+	var n := items.size()
+	var tw := 56.0
+	var gap := 8.0
+	var th := 84.0
+	var x0 := 320.0 - (n * tw + (n - 1) * gap) / 2.0
+	var y := area.position.y + 34.0
+	var tops: Array = []
+	for i in n:
+		var r := Rect2(roundf(x0 + i * (tw + gap)), y, tw, th)
+		var g: Dictionary = items[i]
+		var rad := float(g["z"])
+		var cy := r.end.y - 8.0 - rad
+		if i == hole and state != "correct":
+			_draw_hole(r, qcol)
+		else:
+			PixelArt.draw_box(self, r, Color8(255, 240, 200), PixelArt.C["k"])
+			_draw_glyph(g, Vector2(r.get_center().x, cy))
+		tops.append(Vector2(r.get_center().x, cy - rad - 3.0))
+	if _hint_t >= 0.0 and state != "correct":
+		draw_dashed_line(tops[0] as Vector2, tops[n - 1] as Vector2, _pulse(_pcolor()), 2.0, 4.0)
+		var hp: Vector2 = tops[hole]
+		draw_rect(Rect2(hp.x - 3.0, hp.y - 1.0, 6, 3), _pulse(PixelArt.C["y"]))
+
+
+## Mirror: the right half repeats the left half flipped. Hint: the matching square flashes and a
+## dashed line hops over the mirror to the gap.
+func _draw_mirror(v: Dictionary, area: Rect2, qcol: Color) -> void:
+	var w := int(v["w"])
+	var h := int(v["h"])
+	var cells: Array = v["cells"]
+	var hole: Array = v["hole"]
+	var hr := int(hole[0])
+	var hc := int(hole[1])
+	var cs := 46.0 if w * h <= 4 else (38.0 if w == 2 else 32.0)
+	var gap := 30.0
+	var y0 := roundf(area.position.y + (area.size.y - h * cs) / 2.0 - 4.0)
+	var xl := roundf(320.0 - gap / 2.0 - w * cs)
+	var xr := roundf(320.0 + gap / 2.0)
+	draw_dashed_line(Vector2(320, y0 - 12.0), Vector2(320, y0 + h * cs + 12.0), PixelArt.C["A"], 2.0, 4.0)
+	for r in h:
+		for c in w:
+			_cell(Rect2(xl + c * cs, y0 + r * cs, cs, cs), int((cells[r] as Array)[c]))
+			var rr := Rect2(xr + c * cs, y0 + r * cs, cs, cs)
+			if r == hr and c == hc and state != "correct":
+				_draw_hole(rr, qcol, 18 if cs < 36.0 else 30)
+			else:
+				_cell(rr, int((cells[r] as Array)[w - 1 - c]))
+	if _hint_t >= 0.0 and state != "correct":
+		var partner := Rect2(xl + (w - 1 - hc) * cs, y0 + hr * cs, cs, cs)
+		var target := Rect2(xr + hc * cs, y0 + hr * cs, cs, cs)
+		_hl(partner)
+		draw_dashed_line(partner.get_center(), target.get_center(), PixelArt.C["k"], 3.0, 4.0)
+		draw_dashed_line(partner.get_center(), target.get_center(), _pulse(PixelArt.C["y"]), 1.0, 4.0)
+
+
+func _cell(r: Rect2, code: int) -> void:
+	var col := _col(code)
+	draw_rect(r, PixelArt.C["k"])
+	draw_rect(r.grow(-1), col)
+	draw_rect(Rect2(r.position + Vector2(2, 2), Vector2(maxf(r.size.x - 6.0, 2.0), 2)), col.lightened(0.4))
+
+
+## Jigsaw: a pixel picture with a square cut out. Hint: the hole pulses.
+func _draw_piece(v: Dictionary, area: Rect2, qcol: Color) -> void:
+	var rows: Array = v["rows"]
+	var hole: Array = v["hole"]
+	var ps := int(v["ps"])
+	var px := 12.0
+	var w := String(rows[0]).length()
+	var h := rows.size()
+	var o := Vector2(roundf(320.0 - w * px / 2.0), roundf(area.position.y + 22.0))
+	PixelArt.draw_box(self, Rect2(o - Vector2(4, 4), Vector2(w * px + 8.0, h * px + 8.0)), PixelArt.C["b"], PixelArt.C["k"])
+	for y in h:
+		var row := String(rows[y])
+		for x in w:
+			draw_rect(Rect2(o + Vector2(x * px, y * px), Vector2(px, px)), _pix(row[x]))
+	var hr := Rect2(o + Vector2(int(hole[0]) * px, int(hole[1]) * px), Vector2(ps * px, ps * px))
+	if state != "correct":
+		draw_rect(hr, Color8(36, 28, 52))
+		draw_rect(hr.grow(-2), Color8(52, 40, 72))
+		var qs := 12 if ps == 2 else 18
+		_text_o1(Vector2(hr.get_center().x, hr.get_center().y - qs * 5.0 / 12.0), "?", qcol, qs, true)
+		if _hint_t >= 0.0:
+			_hl(hr.grow(1))
+
+
+func _draw_patch(patch: Array, r: Rect2) -> void:
+	var n := patch.size()
+	var cs := floorf(minf(r.size.x - 24.0, r.size.y - 18.0) / n)
+	var side := cs * n
+	var o := (r.get_center() - Vector2(side, side) / 2.0).round()
+	draw_rect(Rect2(o - Vector2(2, 2), Vector2(side + 4.0, side + 4.0)), PixelArt.C["k"])
+	for y in n:
+		var row := String(patch[y])
+		for x in n:
+			draw_rect(Rect2(o + Vector2(x * cs, y * cs), Vector2(cs, cs)), _pix(row[x]))
+
+
+## Balance scale. It wobbles while you think and tips the right way once it is solved.
+## Hint: the totals appear under the pans, left then right.
+func _draw_scale(v: Dictionary, area: Rect2) -> void:
+	var left: Array = v["left"]
+	var right: Array = v["right"]
+	var k: Color = PixelArt.C["k"]
+	var tilt := sin(_t * 1.8) * 0.12
+	if state == "correct":
+		var want := 1.0 if int(q["answer"]) == 0 else (-1.0 if int(q["answer"]) == 2 else 0.0)
+		tilt = lerpf(tilt, want, clampf(_state_t / 0.4, 0.0, 1.0))
+	var cy := area.position.y + 22.0
+	var lp := Vector2(190.0, roundf(cy + tilt * 16.0))
+	var rp := Vector2(450.0, roundf(cy - tilt * 16.0))
+	PixelArt.draw_box(self, Rect2(317, cy, 6, area.end.y - 22.0 - cy), PixelArt.C["T"], k)
+	PixelArt.draw_box(self, Rect2(288, area.end.y - 30.0, 64, 10), PixelArt.C["b"], k)
+	draw_line(lp, rp, k, 6.0)
+	draw_line(lp, rp, PixelArt.C["t"], 3.0)
+	PixelArt.draw_disk(self, Vector2(320, cy), 7.0, k)
+	PixelArt.draw_disk(self, Vector2(320, cy), 5.0, PixelArt.C["y"])
+	for side in 2:
+		var e := lp if side == 0 else rp
+		var weights: Array = left if side == 0 else right
+		var py := roundf(e.y + 58.0)
+		draw_line(e, Vector2(e.x - 52.0, py), PixelArt.C["G"], 1.0)
+		draw_line(e, Vector2(e.x + 52.0, py), PixelArt.C["G"], 1.0)
+		PixelArt.draw_box(self, Rect2(e.x - 56.0, py, 112, 7), PixelArt.C["W"], k)
+		_draw_pan_items(weights, Vector2(e.x, py), String(v["mode"]), String(v.get("icon", "seed")))
+		if _hint_t >= 0.0 and _hint_shown >= side + 1:
+			var total := 0
+			for wv in weights:
+				total += int(wv)
+			var tb := Rect2(e.x - 16.0, py + 11.0, 32, 17)
+			PixelArt.draw_box(self, tb, _tint(_pcolor()), _pcolor())
+			PixelArt.draw_text_centered(self, Vector2(e.x, tb.position.y + 3.0), str(total), k, false, 12)
+
+
+func _draw_pan_items(weights: Array, base: Vector2, mode: String, icon: String) -> void:
+	var n := weights.size()
+	if mode == "count":
+		var tex := _icon_tex(icon)
+		var sz := tex.get_size() * (3.0 if n <= 3 else 2.0)
+		var per := 3
+		for i in n:
+			var row := int(i / per)
+			var in_row := mini(per, n - row * per)
+			var x := base.x + (i % per - (in_row - 1) / 2.0) * (sz.x + 6.0)
+			var y := base.y - (row + 1) * (sz.y + 3.0) + 2.0
+			draw_texture_rect(tex, Rect2((Vector2(x, y) - Vector2(sz.x / 2.0, 0.0)).round(), sz), false)
+		return
+	var keys := ["r", "A", "y", "Z", "v", "o", "u", "p", "e", "t"]
+	var bw := 30.0
+	var total_w := n * bw + (n - 1) * 3.0
+	for i in n:
+		var wv := int(weights[i])
+		var ht := 10.0 + wv * 3.0
+		var r := Rect2(roundf(base.x - total_w / 2.0 + i * (bw + 3.0)), base.y - ht, bw, ht)
+		var key: String = keys[clampi(wv - 1, 0, keys.size() - 1)]
+		PixelArt.draw_box(self, r, PixelArt.C[key], PixelArt.C["k"])
+		PixelArt.draw_text_centered(self, Vector2(r.get_center().x, r.position.y + 3.0), str(wv), PixelArt.C["w"], true, 12)
+
+
+## The answer button of a balance question: a little scale tipped one way (or level).
+func _draw_mini_scale(choice: int, c: Vector2) -> void:
+	var k: Color = PixelArt.C["k"]
+	var t := 1.0 if choice == 0 else (-1.0 if choice == 2 else 0.0)
+	var lp := Vector2(c.x - 34.0, c.y - 8.0 + t * 9.0)
+	var rp := Vector2(c.x + 34.0, c.y - 8.0 - t * 9.0)
+	draw_rect(Rect2(c.x - 2.0, c.y - 8.0, 4, 30), PixelArt.C["T"])
+	draw_rect(Rect2(c.x - 14.0, c.y + 20.0, 28, 4), PixelArt.C["b"])
+	draw_line(lp, rp, k, 4.0)
+	draw_line(lp, rp, PixelArt.C["t"], 2.0)
+	for side in 2:
+		var e := lp if side == 0 else rp
+		var lower := (side == 0 and choice == 0) or (side == 1 and choice == 2)
+		var level := choice == 1
+		var py := roundf(e.y + 16.0)
+		draw_line(e, Vector2(e.x - 12.0, py), PixelArt.C["G"], 1.0)
+		draw_line(e, Vector2(e.x + 12.0, py), PixelArt.C["G"], 1.0)
+		draw_rect(Rect2(e.x - 14.0, py, 28, 4), k)
+		draw_rect(Rect2(e.x - 13.0, py, 26, 3), PixelArt.C["W"])
+		var bs := Vector2(14, 10) if lower else (Vector2(10, 7) if level else Vector2(8, 5))
+		PixelArt.draw_box(self, Rect2(roundf(e.x - bs.x / 2.0), py - bs.y, bs.x, bs.y), PixelArt.C["r"], k)
+
+
+## Patterns made of pictures, with the gap anywhere. Hint: brackets round each repeat (or "+n" hops
+## for growing dots).
+func _draw_chain(v: Dictionary, area: Rect2, qcol: Color) -> void:
+	var items: Array = v["items"]
+	var hole := int(v["hole"])
+	var unit := int(v["unit"])
+	var step := int(v["step"])
+	var n := items.size()
+	var bw := 48.0
+	var gap := 6.0
+	var x0 := 320.0 - (n * bw + (n - 1) * gap) / 2.0
+	var y := area.position.y + 46.0
+	for i in n:
+		var r := Rect2(roundf(x0 + i * (bw + gap)), y, bw, bw)
+		if i == hole and state != "correct":
+			_draw_hole(r, qcol)
+		else:
+			if i == hole:
+				PixelArt.draw_box(self, r, _tint(PixelArt.C["Z"]), PixelArt.C["Z"])
+			else:
+				PixelArt.draw_box(self, r, Color8(255, 240, 200), PixelArt.C["k"])
+			_draw_glyph(items[i], r.get_center())
+	if _hint_t < 0.0 or state == "correct":
+		return
+	var by := y + bw + 7.0
+	if unit > 0:
+		var groups := int(ceil(n / float(unit)))
+		for g in groups:
+			if g >= _hint_shown:
+				break
+			var a := x0 + g * unit * (bw + gap)
+			var b := minf(a + unit * (bw + gap) - gap, x0 + n * (bw + gap) - gap)
+			var col: Color = PixelArt.C["n"] if g % 2 == 0 else PixelArt.C["P"]
+			draw_rect(Rect2(roundf(a), by, roundf(b - a), 2), col)
+			draw_rect(Rect2(roundf(a), by - 3, 2, 3), col)
+			draw_rect(Rect2(roundf(b) - 2, by - 3, 2, 3), col)
+	else:
+		for i in n - 1:
+			if _hint_shown > i:
+				var ax := x0 + (i + 1) * (bw + gap) - gap / 2.0
+				var lbl := ("+%d" % step) if step > 0 else ("%d" % step)
+				PixelArt.draw_text_centered(self, Vector2(ax, y - 14.0), lbl, PixelArt.C["n"], false, 12)
+
+
 func _draw_button(i: int, dy: float) -> void:
 	var r := _btn_rect(i)
 	r.position.y += dy
@@ -749,7 +1202,7 @@ func _draw_button(i: int, dy: float) -> void:
 	var choice: int = int((q["choices"] as Array)[i])
 	var is_sel := i == sel
 	var is_correct := choice == int(q["answer"])
-	var show_answer := is_correct and (wrong_count >= 3 or state == "correct")
+	var show_answer := is_correct and (wrong_count >= 2 or state == "correct")
 	var lift := 0.0
 	if is_sel and state != "correct":
 		lift = -4.0 + roundf(sin(_t * 6.0))
@@ -793,6 +1246,13 @@ func _draw_button(i: int, dy: float) -> void:
 			_draw_shape(choice, c, 22.0, PixelArt.C["o"])
 		"color":
 			_draw_code("color", choice, c, 22.0)
+		"glyph":
+			var opts: Array = v["options"]
+			_draw_glyph(opts[choice], c, bool(v.get("shadow", false)), 1.45)
+		"patch":
+			_draw_patch((v["options"] as Array)[choice], r)
+		"scale":
+			_draw_mini_scale(choice, c)
 		_:
 			PixelArt.draw_text_centered(self, Vector2(c.x, c.y - 12), str(choice), k, false, 30)
 			# hint for "which is biggest": tiny seed tally under each number
@@ -803,6 +1263,9 @@ func _draw_button(i: int, dy: float) -> void:
 					var col_i := j % 10
 					var sx := tx + col_i * 8 + (4 if col_i >= 5 else 0)
 					draw_texture_rect(seed, Rect2(sx, r.end.y - 25 + int(j / 10) * 12, 6, 10), false)
+	# a wrong pick is washed out so the choices shrink (never a penalty, just a clue)
+	if _tried[i] and state != "correct":
+		draw_rect(r, Color(1.0, 0.96, 0.86, 0.62))
 	# pointer arrow over the selected button
 	if is_sel and state != "correct":
 		var ay := r.position.y - 14 + roundf(sin(_t * 8.0) * 2.0)

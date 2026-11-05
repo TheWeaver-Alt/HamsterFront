@@ -72,7 +72,7 @@
   - `bash tools/check.sh`: `check: PASS` (quiz validator 0 of 11 corruptions slipped through, fuzz 18000 questions 0 bad, `economy: ok`, `economy gate: ok`, `lob-free` landed, `stuck: cases=154 wedged=0`, `banked_total=260`).
   - Learning Mode on, `--waves=3 --learning=1` and `--learning=3` with `--economy`: `check: PASS`, 6 puzzles asked and solved each time.
   - Mutation test: with `_solve_gate` made to skip the puzzle, the gate check reported 2 `ERROR: economy:` lines ("should ask exactly one puzzle (asked 0, then 0)"); restored.
-- Committed on `main`, not pushed.
+- Committed on `main`; pushed to GitHub on 2026-11-05.
 - Next: make the chassis data-driven, then add the tank and drone.
 
 ### 2026-11-05 · Silo and seed economy (ADR-0002)
@@ -88,7 +88,7 @@
   - `tools/SmokeTest.gd --economy` asserts the cap, capped banking, each upgrade and the top-level refusal. Mutation test: with the cap removed it reported 2 `ERROR: economy:` lines (`add_seeds` returned 30 instead of 10), then passed again once restored.
   - `bash tools/check.sh`: `check: PASS` (`economy: ok`, `lob-free` landed, kills=204, silo 1449/1500, `banked_total=290`).
 - Found along the way: the pilots spawn 53.8 px from the Silo's center, just outside the 52 px use range, so the UPGRADE tag and prompts appear only once a pilot steps closer. That matches banking and is left as is.
-- Committed on `main`, not pushed.
+- Committed on `main`; pushed to GitHub on 2026-11-05.
 - Next: merge the two side branches (see In progress).
 
 ### 2026-11-02 · Renamed to HamsterFront
@@ -97,7 +97,7 @@
 - Title screen (`scripts/ui/TitleScreen.gd`): the per-letter logo now spells HAMSTERFRONT and the small "DEFENCE OF" line above it is removed. "MECH-POUCH PROTOCOL" stays as the subtitle. Checked on a rendered screenshot: it fits and the shine and drop-in still work.
 - Done before any save file exists, because Godot derives the `user://` folder from the project name and the Workshop will write there.
 - Checks: `bash tools/check.sh`: `check: PASS` (kills=204, silo 1352/1500). `kit.py check`: 28 OK, 0 to fix.
-- Committed on `main`, not pushed.
+- Committed on `main`; pushed to GitHub on 2026-11-05.
 
 ### 2026-11-02 · Freed-lambda error fixed
 
@@ -109,7 +109,7 @@
   - A first version of the fix failed to parse (`weakref()` returns a Variant, and the project treats that as an error). The check caught it, and the fix was retyped as `WeakRef`.
   - Regression on the fix: clean, 3 runs of 3 (`--waves=1`).
   - `bash tools/check.sh`: `check: PASS` (kills=204, silo 1342/1500, `lob-free: mortar shell landed after its tower was destroyed`).
-- Committed on `main`, not pushed.
+- Committed on `main`; pushed to GitHub on 2026-11-05.
 - Next: Silo and economy per ADR-0002.
 
 ### 2026-11-02 · Owner's design brief turned into a roadmap
@@ -129,5 +129,5 @@
   - Baseline smoke, before any change: `[smoke] DONE phase=wave wave=6 max_wave=6 kills=203 silo=1500/1500 … towers=9`, with `ERROR: Lambda capture at index 3 was freed` at `ShotManager.gd:109`, which `tools/check.sh` would fail.
   - `bash tools/check.sh`, twice after the scaffold: `check: PASS` (kills=205, silo 1500/1500; kills=207, silo 1465/1500).
   - `kit.py check`: 3 OK with 8 required and 4 recommended missing before, 28 OK and 0 to fix after.
-- Committed as `9b8a1e5` (not pushed).
+- Committed as `9b8a1e5`; pushed to GitHub on 2026-11-05.
 - Next: fix the freed-lambda error in `ShotManager`.

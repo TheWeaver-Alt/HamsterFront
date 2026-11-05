@@ -54,7 +54,7 @@ func tick(delta: float, sprinting: bool) -> void:
 		return
 	var no_heat: bool = mech.stats.has_flag("no_overheat")
 	if sprinting and not no_heat:
-		heat += mech.stats.g("heat_rate") * delta
+		heat += mech.stats.g("heat_rate") * (1.0 + mech.stats.g("heat_weight") * mech.pouch.fill()) * delta
 	else:
 		heat = maxf(0.0, heat - mech.stats.g("heat_decay") * delta)
 	if heat >= REDLINE:

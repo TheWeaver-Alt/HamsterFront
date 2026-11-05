@@ -11,30 +11,56 @@ extends RefCounted
 ##   weapon_pos    weapon hardpoint, relative to the mech's feet
 ##   weapon_front  how far the hardpoint sits ahead of the body along the facing
 ##   shadow        radius of the ground shadow
+##   flies         true: it hovers, and cliffs and towers do not block it
 ##   stats         base stats (see MechPlayer and the header of autoloads/CardDB.gd)
+##
+## How each mech carries seed weight (ADR-0003): `pouch_slow` is the speed lost when the cheeks are full,
+## `heat_weight` makes the exercise wheel heat up faster when full, and a flyer sags lower (DroneVisual).
 
 ## Selection order on the title screen.
-const IDS := ["brawler", "wheeler"]
+const IDS := ["brawler", "wheeler", "tank", "drone"]
 
 const DEFS := {
 	"brawler": {
 		"name": "BRAWLER-01", "blurb": "ESPRESSO + DUCT TAPE", "script": "Brawler", "unlock": "start",
-		"weapon_pos": Vector2(0, -9), "weapon_front": 5.0, "shadow": 10.0,
+		"weapon_pos": Vector2(0, -9), "weapon_front": 5.0, "shadow": 10.0, "flies": false,
 		"stats": {
 			"max_hp": 140.0, "move_speed": 74.0, "sprint_mult": 1.6, "damage_mult": 1.0, "fire_rate_mult": 1.0,
 			"pierce": 0.0, "extra_projectiles": 0.0, "pouch_capacity": 50.0, "pouch_slow": 0.4,
-			"pickup_radius": 30.0, "heat_rate": 34.0, "heat_decay": 16.0, "alt_damage_mult": 1.0,
+			"pickup_radius": 30.0, "heat_rate": 34.0, "heat_decay": 16.0, "heat_weight": 0.0, "alt_damage_mult": 1.0,
 			"alt_size_mult": 1.0, "spit_damage_mult": 1.0, "revive_speed": 1.0, "lifesteal": 0.0,
 			"seed_leak": 0.0, "damage_taken": 1.0, "vent_heal": 0.0, "spinout_bonus": 0.0,
 		},
 	},
 	"wheeler": {
 		"name": "WHEELER-X", "blurb": "BALL ON SPIDER LEGS", "script": "Wheeler", "unlock": "start",
-		"weapon_pos": Vector2(0, -28), "weapon_front": 0.0, "shadow": 12.0,
+		"weapon_pos": Vector2(0, -28), "weapon_front": 0.0, "shadow": 12.0, "flies": false,
 		"stats": {
 			"max_hp": 100.0, "move_speed": 98.0, "sprint_mult": 1.55, "damage_mult": 1.0, "fire_rate_mult": 1.0,
-			"pierce": 0.0, "extra_projectiles": 0.0, "pouch_capacity": 40.0, "pouch_slow": 0.4,
-			"pickup_radius": 36.0, "heat_rate": 30.0, "heat_decay": 15.0, "alt_damage_mult": 1.0,
+			"pierce": 0.0, "extra_projectiles": 0.0, "pouch_capacity": 40.0, "pouch_slow": 0.25,
+			"pickup_radius": 36.0, "heat_rate": 30.0, "heat_decay": 15.0, "heat_weight": 0.8, "alt_damage_mult": 1.0,
+			"alt_size_mult": 1.0, "spit_damage_mult": 1.0, "revive_speed": 1.0, "lifesteal": 0.0,
+			"seed_leak": 0.0, "damage_taken": 1.0, "vent_heal": 0.0, "spinout_bonus": 0.0,
+		},
+	},
+	"tank": {
+		"name": "HOWITZER-9", "blurb": "BISCUIT-TIN ARTILLERY", "script": "Tank", "unlock": "workshop",
+		"weapon_pos": Vector2(0, -21), "weapon_front": 9.0, "shadow": 16.0, "flies": false,
+		"stats": {
+			"max_hp": 200.0, "move_speed": 56.0, "sprint_mult": 1.35, "damage_mult": 1.0, "fire_rate_mult": 1.0,
+			"pierce": 0.0, "extra_projectiles": 0.0, "pouch_capacity": 90.0, "pouch_slow": 0.12,
+			"pickup_radius": 34.0, "heat_rate": 26.0, "heat_decay": 15.0, "heat_weight": 0.0, "alt_damage_mult": 1.0,
+			"alt_size_mult": 1.0, "spit_damage_mult": 1.0, "revive_speed": 1.0, "lifesteal": 0.0,
+			"seed_leak": 0.0, "damage_taken": 1.0, "vent_heal": 0.0, "spinout_bonus": 0.0,
+		},
+	},
+	"drone": {
+		"name": "WHIRLYBIRD-Z", "blurb": "FLIES OVER CLIFFS", "script": "Drone", "unlock": "workshop",
+		"weapon_pos": Vector2(0, -2), "weapon_front": 0.0, "shadow": 9.0, "flies": true,
+		"stats": {
+			"max_hp": 90.0, "move_speed": 112.0, "sprint_mult": 1.5, "damage_mult": 1.0, "fire_rate_mult": 1.0,
+			"pierce": 0.0, "extra_projectiles": 0.0, "pouch_capacity": 30.0, "pouch_slow": 0.55,
+			"pickup_radius": 44.0, "heat_rate": 30.0, "heat_decay": 16.0, "heat_weight": 0.0, "alt_damage_mult": 1.0,
 			"alt_size_mult": 1.0, "spit_damage_mult": 1.0, "revive_speed": 1.0, "lifesteal": 0.0,
 			"seed_leak": 0.0, "damage_taken": 1.0, "vent_heal": 0.0, "spinout_bonus": 0.0,
 		},
@@ -55,7 +81,12 @@ static func base_stats(id: String) -> Dictionary:
 	return (def(id)["stats"] as Dictionary).duplicate()
 
 
-## Every mech is unlocked until the Workshop exists. It will own the real list (ADR-0003).
+static func flies(id: String) -> bool:
+	return bool(def(id)["flies"])
+
+
+## Every mech is unlocked until the Workshop exists. It will own the real list (ADR-0003): the tank and the drone
+## are marked "workshop" and will be locked behind it.
 static func is_unlocked(_id: String) -> bool:
 	return true
 

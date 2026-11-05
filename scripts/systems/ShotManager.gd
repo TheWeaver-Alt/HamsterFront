@@ -186,6 +186,8 @@ func _lob_trail(s: Shot) -> void:
 			arena.fx.particle(air, Vector2(randf_range(-6, 6), -8), 0.5, Color(0.9, 0.85, 0.75, 0.45), 1.0, -10.0, 2.0, FxManager.PUFF, 2.5)
 		"gas_flask":
 			arena.fx.particle(air, Vector2(randf_range(-6, 6), -10), 0.4, Color(0.4, 1.0, 0.3, 0.5), 1.0, -10.0, 2.0, FxManager.PUFF, 2.0)
+		"seed_bomb":
+			arena.fx.particle(air, Vector2.ZERO, 0.25, Color(1, 0.9, 0.5, 0.5), 1.0, 0.0, 0.0, FxManager.CROSS)
 		"thrown_rat":
 			if _tick % 6 == 0:
 				arena.fx.particle(air, Vector2.ZERO, 0.3, Color(1, 1, 1, 0.6), 1.0, 0.0, 0.0, FxManager.CROSS)
@@ -310,6 +312,8 @@ func _draw_lob(s: Shot) -> void:
 			var back := (s.start - s.target).normalized()
 			for k in 3:
 				draw_rect(Rect2((p + back * (7.0 + k * 3.0) + Vector2(0, k - 1)).round(), Vector2(1, 1)), Color(1, 1, 1, 0.5 - k * 0.15))
+		"seed_bomb":
+			_draw_seed(p, frame, PixelArt.C["s"], PixelArt.C["S"])
 		"gas_flask":
 			PixelArt.draw_disk(self, p, 2.5, Color8(70, 210, 60))
 			draw_rect(Rect2(p + Vector2(-1, -1), Vector2(1, 1)), Color8(170, 255, 100))

@@ -92,7 +92,7 @@ func _ready() -> void:
 	_visual_base = visual.position
 	_weapon_base = weapon.position
 	collision_layer = GameManager.L_PLAYERS
-	collision_mask = GameManager.L_WORLD | GameManager.L_TOWERS | GameManager.L_CLIFF
+	collision_mask = _ground_mask()
 	overlay.draw.connect(_draw_overlay)
 	add_to_group("players")
 
@@ -103,6 +103,18 @@ func get_bark_offset() -> float:
 
 func display_name() -> String:
 	return Chassis.display_name(chassis)
+
+
+## True for a mech that hovers (the drone): cliffs and towers do not block it.
+func flies() -> bool:
+	return Chassis.flies(chassis)
+
+
+## What this mech collides with when it is not mid-hop.
+func _ground_mask() -> int:
+	if flies():
+		return GameManager.L_WORLD
+	return GameManager.L_WORLD | GameManager.L_TOWERS | GameManager.L_CLIFF
 
 
 func color() -> Color:
@@ -195,9 +207,9 @@ func _physics_process(delta: float) -> void:
 				if obj != null and obj.name == "Cliffs" and move.normalized().dot(-col.get_normal()) > 0.5:
 					start_hop(move)
 					break
-	visual.position = _visual_base - Vector2(0, hop_z)
+	visual.position = _visual_base - Vector2(0, hop_z + visual.hover_height())
 	# the hardpoint can sit ahead of the body (BRAWLER's arms hang off the front, which keeps the detailed body visible)
-	weapon.position = _weapon_base + Vector2(float(Chassis.def(chassis)["weapon_front"]) * facing, -hop_z)
+	weapon.position = _weapon_base + Vector2(float(Chassis.def(chassis)["weapon_front"]) * facing, -(hop_z + visual.hover_height()))
 	# --- aim
 	if input.aim_explicit:
 		aim_dir = input.aim
@@ -425,7 +437,7 @@ func _land() -> void:
 		global_position = best
 	hop_t = 0.0
 	hop_z = 0.0
-	collision_mask = GameManager.L_WORLD | GameManager.L_TOWERS | GameManager.L_CLIFF
+	collision_mask = _ground_mask()
 	GameManager.arena.fx.dust(global_position, 8)
 	GameManager.arena.fx.ring(global_position, 14.0, PixelArt.C["t"], 0.25)
 	JuiceManager.add_trauma(0.12)
@@ -583,7 +595,7 @@ func _on_spun_out() -> void:
 
 func _draw() -> void:
 	# soft two-tone ground shadow (shrinks while jetpacking)
-	var shrink := 1.0 - hop_z / (HOP_HEIGHT * 2.0)
+	var shrink := maxf(0.3, 1.0 - (hop_z + visual.hover_height()) / (HOP_HEIGHT * 2.0))
 	var rx := float(Chassis.def(chassis)["shadow"]) * shrink
 	for dy in range(-2, 3):
 		var hw := roundf(rx * sqrt(maxf(0.0, 1.0 - pow(dy / 2.6, 2.0))))
@@ -623,7 +635,7 @@ func _draw_overlay() -> void:
 		var at2: Vector2 = preview_tower.global_position - global_position
 		var lvl: int = mini(preview_tower.level + 1, GameManager.MAX_TOWER_LEVEL)
 		TowerBase.draw_range_preview(overlay, preview_tower.kind, at2, lvl, preview_tower.global_position)
-	var lift := -hop_z
+	var lift := -(hop_z + visual.hover_height())
 	# player tag: little plate + pointer, gently bobbing
 	var bob := roundf(sin(t * 3.0 + player_id))
 	var ty := top + 1.0 + bob + lift

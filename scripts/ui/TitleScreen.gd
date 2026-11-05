@@ -516,11 +516,11 @@ func _draw_slots() -> void:
 		if joined:
 			var chassis := str(GameManager.player_chassis[i])
 			PixelArt.draw_text_centered(self, Vector2(cx, y + 4), "P%d READY!" % (i + 1), col, true)
-			draw_texture(PixelArt.tex("ham_head_%d" % (2 if i == 0 else 4)), Vector2(x + 4, y + 12))
-			PixelArt.draw_text(self, Vector2(x + 34, y + 14), Chassis.display_name(chassis), PixelArt.C["w"])
+			draw_texture(PixelArt.tex("mech_icon_" + chassis), Vector2(x + 2, y + 9))
+			PixelArt.draw_text(self, Vector2(x + 50, y + 14), Chassis.display_name(chassis), PixelArt.C["w"])
 			var blurb := String(Chassis.def(chassis)["blurb"])
-			PixelArt.draw_text(self, Vector2(x + 34, y + 22), blurb, PixelArt.C["g"])
-			PixelArt.draw_text(self, Vector2(x + 34, y + 30), PlayerInput.device_label(slots[i]), PixelArt.C["W"])
+			PixelArt.draw_text(self, Vector2(x + 50, y + 22), blurb, PixelArt.C["g"])
+			PixelArt.draw_text(self, Vector2(x + 50, y + 30), PlayerInput.device_label(slots[i]), PixelArt.C["W"])
 			# learning mode: big friendly label with stars
 			var lv := int(learn[i]) if i < learn.size() else 0
 			var lcol: Color = PixelArt.C[LEARN_COLORS[lv]]

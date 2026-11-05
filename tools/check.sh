@@ -25,7 +25,11 @@ if [ -z "$GODOT_BIN" ]; then
 	echo "check: Godot 4 not found. Install it or set GODOT=/path/to/godot." >&2
 	exit 2
 fi
-[ $# -eq 0 ] && set -- --waves=5 --speed=4 --spawn-all --lob-free --stuck --economy --cards
+roster_run=0
+if [ $# -eq 0 ]; then
+	set -- --waves=5 --speed=4 --spawn-all --lob-free --stuck --economy --cards
+	roster_run=1
+fi
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 ERR='^(SCRIPT )?ERROR:'
@@ -50,13 +54,21 @@ if [ $status -ne 0 ] || [ "$errors" -gt 0 ] || ! grep -q -E '^\[quiz\] fuzz: .* 
 	exit 1
 fi
 
-"$GODOT_BIN" --headless --path . res://tools/SmokeTest.tscn -- "$@" >"$log" 2>&1
-status=$?
-grep '^\[smoke\]' "$log"
-errors=$(grep -c -E "$ERR" "$log")
-if [ $status -ne 0 ] || [ "$errors" -gt 0 ] || ! grep -q '^\[smoke\] DONE' "$log"; then
-	grep -A4 -E "$ERR" "$log"
-	echo "check: FAIL smoke (exit=$status, errors=$errors)"
-	exit 1
+run_smoke() {
+	"$GODOT_BIN" --headless --path . res://tools/SmokeTest.tscn -- "$@" >"$log" 2>&1
+	status=$?
+	grep '^\[smoke\]' "$log"
+	errors=$(grep -c -E "$ERR" "$log")
+	if [ $status -ne 0 ] || [ "$errors" -gt 0 ] || ! grep -q '^\[smoke\] DONE' "$log"; then
+		grep -A4 -E "$ERR" "$log"
+		echo "check: FAIL smoke $* (exit=$status, errors=$errors)"
+		exit 1
+	fi
+}
+
+run_smoke "$@"
+# the other two mechs, so the tank's shells and stomp and the drone's flight, bombs and gust all get played
+if [ $roster_run -eq 1 ]; then
+	run_smoke --waves=3 --speed=4 --spawn-all --chassis=tank,drone --mechs
 fi
 echo "check: PASS"

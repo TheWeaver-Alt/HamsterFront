@@ -100,7 +100,7 @@ func _clear_mechs() -> void:
 	var box := ($CollisionShape2D.shape as RectangleShape2D).size * 0.5
 	var centre: Vector2 = $CollisionShape2D.global_position
 	for m in GameManager.players:
-		if not is_instance_valid(m):
+		if not is_instance_valid(m) or m.flies():
 			continue
 		var body := m.get_node("CollisionShape2D") as CollisionShape2D
 		var r := (body.shape as CircleShape2D).radius

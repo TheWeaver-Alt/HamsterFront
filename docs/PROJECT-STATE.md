@@ -1,6 +1,6 @@
 # Project state
 
-**Stage:** playable, building the mech roster · **Last updated:** 2026-11-05 · **Next:** Add the tank and the drone (roles confirmed in ADR-0003).
+**Stage:** playable, four mechs · **Last updated:** 2026-11-05 · **Next:** Cards that build and upgrade the mech (bought with seeds), then the handbook and the Workshop.
 
 <!-- project-kit 1.0.0. This file owns status. /handoff rewrites Now and adds a session-log entry at the top. -->
 
@@ -9,7 +9,7 @@
 - A full run plays end to end: a join screen (keyboard and mouse, P2 keyboard, gamepads), the ¾-view elevated Backyard with three canyon lanes, plateaus and ramps, build and wave phases, the vending-machine card draft after each wave, and game over when the Silo's structure gives out.
 - The Silo is a steel grain silo with a seed-level window ([ADR-0002](adr/0002-silo-hp-and-seed-store.md)). Seeds are the one currency and live in its store, which holds 150 and can be upgraded to 250, 400 and 600 (60, 120 and 200 seeds). A full store stops banking and the rest stays in the cheeks. The HUD shows `seeds/capacity`, and an UPGRADE tag floats above the Silo when a pilot is in reach.
 - Cards are pictures: each of the 37 has a big drawing of what it does, a short name and one to three arrows for how strong it is. Cursed cards stack the good picture over the bad one. The old sentences are a small grey line under the hand for a grown-up. The pause menu and the game-over screen list cards as strips of the same pictures (`scripts/core/CardFaces.gd`, `scripts/art/CardArt.gd`).
-- Two mechs, BRAWLER-01 and WHEELER-X: cheek pouch (bank, cram, spit), wheel heat (sprint, redline, spin-out, vent), alt attacks, and the Soda-Bottle Jetpack card for hopping cliffs.
+- Four mechs ([ADR-0003](adr/0003-chassis-roster-and-weight.md)), each pilot picking their own on the title screen (the slot shows its portrait): BRAWLER-01 (robot), WHEELER-X (spider ball), HOWITZER-9 (tank: shells lobbed onto the nearest rat, Stomp) and WHIRLYBIRD-Z (drone: flies over cliffs and towers, seed bombs, Rotor Gust). All have the cheek pouch (bank, cram, spit), wheel heat (sprint, redline, spin-out, vent) and alt attacks, and the Soda-Bottle Jetpack card for hopping cliffs (not offered to the drone). Seed weight is per mech: the tank loses 12% of its speed with full cheeks, the spider ball 25% (and its wheel heats up to 80% faster), the robot 40% and the drone 55% (and it sags lower).
 - The full enemy roster (Clan-Squeakers, Jezzails, Plague-Stink Monks, Doom-Roombas, the Rat-Ogre Bruiser), animated, with death animations and burrow crawl-outs.
 - Five towers with three upgrade levels, a +15% high-ground range bonus and Sugar Rush overdrive.
 - Learning Mode (Counting, Maths to 10, Maths to 20; per player) and KID MODE. About half of each level's puzzles are pictures with almost no words (patterns, odd one out, shapes and shadows, mirror, jigsaw piece, balance scale) and the rest are numbers. A wrong answer is never a penalty: a picture hint starts and the wrong buttons fade.
@@ -22,7 +22,7 @@
 - The polish pass (`2689be6` to `bf847bc` on `main`). Its first commit is marked "in progress". Whether more is planned is the owner's call.
 - **Owner's brief of 2026-11-02** (the kid loves the game). Build order is economy, then chassis, then cards, then the Workshop. Done means each piece is playable and `bash tools/check.sh` passes.
   - Done and merged on 2026-11-05: **visual puzzles** (item 1), **Silo and economy** (item 2, [ADR-0002](adr/0002-silo-hp-and-seed-store.md); mech upgrades paying in seeds comes with the cards rework) and the fix for a **mech wedged in a freshly built tower**.
-  3. **Four mechs** ([ADR-0003](adr/0003-chassis-roster-and-weight.md), Proposed): step one is done and checked. The chassis are data (`scripts/mech/Chassis.gd`) with a visual and a weapon script each, and each pilot picks a mech on the title screen. Still to do: the tank (HOWITZER-9) and the drone (WHIRLYBIRD-Z), with their art, weapons, weight behavior and bots that drive them.
+  3. **Four mechs** ([ADR-0003](adr/0003-chassis-roster-and-weight.md)): done and checked (2026-11-05). All four are selectable. Still open: locking the tank and the drone behind the Workshop, which needs the Workshop's own ADR.
   4. **Simpler cards**: done as picture-first cards (all 37 redrawn, none cut). Still open: cards that build and upgrade the mech, paid for in seeds (ADR-0002 item 5).
   5. **Workshop**: Vampire Survivors-style upgrades per mech between runs, saved in a file. The tank and drone unlock here. Needs its own ADR for the save file before any code.
   6. **Two gamepads**: `PlayerInput` and the title screen look like they already support `pad0` and `pad1`. Try it on real hardware.
@@ -30,13 +30,15 @@
 
 ## Next
 
-1. Add the tank (HOWITZER-9) and the drone (WHIRLYBIRD-Z): art, weapons, weight behavior, and bots that drive them.
-2. Cards that build and upgrade the mech, bought with seeds (finishes ADR-0002 item 5), and the handbook.
+1. Cards that build and upgrade the mech, bought with seeds (finishes ADR-0002 item 5).
+2. The handbook (an encyclopedia of rats, mechs, towers and cards), picture-first.
 3. Write the Workshop's ADR (the save file) before any Workshop code.
 
 ## Known gaps and risks
 
 - The 39 card pictures are first-pass art. A few are abstract (salt, sticky shells, sugar, sneeze) and need a child's eye. They were checked on screenshots of the draft screen (one and two pilots), the pause menu and the game-over screen, not on the title screen. On cursed cards the pictures are drawn small (the card has two rows).
+- The tank, the drone and all the new weapon numbers (shell 20 damage, seed bomb 12, stomp, gust) are first-pass and unplayed by a person. The art is first-pass too. The tank and the drone were checked on screenshots in six states each, but nobody has watched the shell arc, the stomp ring or the gust arcs in motion.
+- A hovering drone is blocked by walls, props and the Silo but not by cliffs or towers, and nothing stops it ending a hop-free flight over a cliff face; rats can still reach it with melee. Whether that is too strong needs play.
 - The before/after mech comparison covers idle, cheeks, downed and walking. Firing and the alt attacks are not in it (random spread and particles), so the bots cover their logic and a person has to look at the rest. The capture and diff scripts were scratch work and are not in the repo.
 - The economy numbers (capacity 150/250/400/600, upgrade costs 60/120/200, the wave bonus clamped to the store) are a first pass. No real player has tried them yet, and the bots start with 400 seeds, so the cap barely bites in `tools/check.sh`.
 - The new picture puzzles were checked on screenshots for five types (pattern, odd, mirror, scale, piece) at one level. The other types need a look while playing.
@@ -68,6 +70,19 @@
 | 2026-11-02 | GitHub's default branch is `main` | owner | GitHub repo settings |
 
 ## Session log
+
+### 2026-11-05 · The tank and the drone (ADR-0003, steps three to five)
+
+- Roster (`scripts/mech/Chassis.gd`): HOWITZER-9 (`tank`: 200 HP, slow, 90 seeds in the cheeks, 12% slowdown when full) and WHIRLYBIRD-Z (`drone`: 90 HP, fast, 30 seeds, 55% slowdown, flies). The spider ball now follows the confirmed table too: 25% slowdown and `heat_weight` 0.8, so its wheel heats up to 80% faster with full cheeks. The tank and drone are marked `workshop` but, with no Workshop yet, all four are selectable.
+- Art: `TankArt` (animated treads, a gold biscuit-tin hull with a red lid and a cookie label, a hatch the pilot peeks out of, a turret dome, a barrel with a muzzle brake) and `DroneArt` (a glass pod, a rotor frame, spinning rotor frames, skids). `MechIconArt` composes title-screen portraits of all four from the real parts; each title slot now shows the chosen mech. The first assembled mock-up needed two fixes (pod glass too milky, rotors too faint) and the tank had to grow, because the pilot's head is as wide as the old hull.
+- Behavior: the tank's shell lobs onto the best rat in the aim cone (min 36, max 190 px, else 95 px along the aim), and Stomp (radius 46, stun 1.1 s, 3 s cooldown) shakes everything around it. The drone tosses `seed_bomb` shots (a new lob kind) and blows a Rotor Gust (cone, shove 420, stun 0.7 s, 2.2 s cooldown). Hover is a visual lift (`MechVisual.hover_height()`); the drone's collision mask leaves out cliffs and towers, `TowerBase._clear_mechs` skips flyers, and the jetpack card has `not_chassis: ["drone"]`.
+- Both weapons' landing code is static and captures only a `WeakRef` and a script constant (the lesson from the mortar bug).
+- Bots and tests: `--chassis=a,b` picks the pilots' mechs; `--mechs` asserts the weight order, flight, hover sag, jetpack filter, heat weight, and that stomp, gust, shell and seed bomb each hurt a rat. Mutation test: a tank that carries weight worse than the robot and a drone that does not fly produced 3 `ERROR: mechs:` lines; restored. `tools/check.sh` now plays a second run as the tank and the drone (about 3m45s in total).
+- Two bugs on the way: weapon variables derived from the untyped `mech` need explicit types (the project treats an inferred Variant as an error), and a stomp or gust called in the frame a rat spawns misses it, because the arena's spatial index only learns of it a frame later.
+- Re-ran the pixel comparison of the original two mechs against the baseline from before the roster work: 0 differing pixels in all 12 images, even with the shared hover hook, shadow change and the new weight rules.
+- Checks: `bash tools/check.sh`: `check: PASS` (`cards: ok`, `economy: ok`, `economy gate: ok`, `lob-free` landed, `stuck: cases=154 wedged=0`, then the tank and drone run with `mechs: ok`).
+- Committed on `main`, not pushed.
+- Next: cards that build and upgrade the mech.
 
 ### 2026-11-05 · Picture-first cards
 

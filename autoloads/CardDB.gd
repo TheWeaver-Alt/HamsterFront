@@ -3,14 +3,14 @@ extends Node
 ##
 ## Card fields:
 ##   id, name, tier ("mod" | "tower" | "synergy" | "cursed"), desc, downside (cursed only),
-##   weight, max (stack cap), min_wave, coop (true = co-op only), chassis ("" or a Chassis id),
+##   weight, max (stack cap), min_wave, coop (true = co-op only), chassis ("" or a Chassis id), not_chassis (an Array of Chassis ids that never see the card),
 ##   mods  -> applied to the picking player's StatBlock   {"add":{}, "mul":{}, "flags":[]}
 ##   gmods -> applied to GameManager.gstats (towers / whole team)
 ##   on_pick -> optional hook name handled in apply_card()
 ##
 ## Player stat keys (see the stats in scripts/mech/Chassis.gd): max_hp, move_speed, sprint_mult, damage_mult,
 ##   fire_rate_mult, pierce, extra_projectiles, pouch_capacity, pouch_slow, pickup_radius,
-##   heat_rate, heat_decay, alt_damage_mult, alt_size_mult, spit_damage_mult, revive_speed,
+##   heat_rate, heat_decay, heat_weight, alt_damage_mult, alt_size_mult, spit_damage_mult, revive_speed,
 ##   lifesteal, seed_leak, damage_taken, vent_heal, spinout_bonus
 ## Player flags: no_overheat, forbidden_brie, warp_invert, rat_magnet
 ## Global flags: gatling_flaming, laser_split, decoy_confetti, jumper_cables, blood_brothers,
@@ -73,7 +73,7 @@ var cards: Array = [
 	{"id": "radiator_fins", "tier": "mod", "name": "RADIATOR FINS", "weight": 8, "max": 2,
 		"desc": "WHEEL COOLS 60% FASTER. VENTING HEALS 10 HP.",
 		"mods": {"mul": {"heat_decay": 1.6}, "add": {"vent_heal": 10}}},
-	{"id": "jetpack", "tier": "mod", "name": "SODA-BOTTLE JETPACK", "weight": 11, "max": 1,
+	{"id": "jetpack", "tier": "mod", "name": "SODA-BOTTLE JETPACK", "weight": 11, "max": 1, "not_chassis": ["drone"],
 		"desc": "SPRINT INTO A CLIFF (OR PRESS JUMP) TO ROCKET UP OR DOWN IT.",
 		"mods": {"flags": ["jetpack"]}},
 	{"id": "bubble_wrap", "tier": "mod", "name": "BUBBLE WRAP ARMOR", "weight": 8, "max": 3,
@@ -192,6 +192,9 @@ func is_eligible(card: Dictionary, player) -> bool:
 		return false
 	var ch: String = card.get("chassis", "")
 	if ch != "" and player != null and player.chassis != ch:
+		return false
+	var banned: Array = card.get("not_chassis", [])
+	if player != null and banned.has(player.chassis):
 		return false
 	if times_owned(card, player) >= int(card.get("max", 99)):
 		return false

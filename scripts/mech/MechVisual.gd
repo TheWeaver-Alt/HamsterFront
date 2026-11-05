@@ -191,6 +191,11 @@ func _spin_wobble() -> float:
 	return 0.12
 
 
+## How high the mech floats above its shadow (the drone hovers; everything else is 0).
+func hover_height() -> float:
+	return 0.0
+
+
 ## Where steam comes out, relative to the mech's feet.
 func vent_offset() -> Vector2:
 	return Vector2(0, -26)

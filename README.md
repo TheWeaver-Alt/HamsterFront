@@ -68,13 +68,17 @@ About half the puzzles at every level are pictures with hardly any words: contin
 | Ready up (skip build timer) | G or Enter | `\` | Back / Select |
 | Pause | Esc / P | Esc | Start |
 
-On the title screen, every device presses its confirm button (E / Enter / A) to join. P1 presses confirm again to start. In 1-player mode, left/right on the title screen switches between the two mechs.
+On the title screen, every device presses its confirm button (E / Enter / A) to join. P1 presses confirm again to start. Each pilot picks their own mech with left/right on their slot, and the slot shows a picture of it.
 
 ## The cast
 
 **Mechs**
 - **BRAWLER-01, "The Tin-Can Titan"**: an espresso machine held together with duct tape. Fires a short-range Sawdust Shotgun. Its alt attack is a hydraulic Cardboard-Tube Fist punch.
 - **WHEELER-X, "The Turbo Ball"**: a glass hamster ball on spider legs. Fires dual piercing Toothpick Railguns. Sprinting leaves burning rubber trails, and its alt attack is a Burnout Dash.
+- **HOWITZER-9, "The Biscuit Tin"**: a gold biscuit-tin tank on treads. Its shell is lobbed onto the nearest rat in your aim, and its alt attack is a Stomp that shakes and stuns everything around it. It carries the most seeds (90 in the cheeks) and is barely slowed by them, but it is slow to begin with.
+- **WHIRLYBIRD-Z, "The Whirly-Gig"**: a hamster in a glass pod under two rotors. It flies, so cliffs and towers do not stop it (and it never needs the jetpack card). It drops seed bombs ahead of itself, and its alt attack is a Rotor Gust that blows rats back. It carries the fewest seeds (30), is slowed the most by them, and sags lower the fuller its cheeks are.
+
+Every mech carries the weight of a full cheek pouch differently: the tank loses 12% of its speed, WHEELER-X 25% (and its wheel heats up to 80% faster), BRAWLER-01 40% and WHIRLYBIRD-Z 55%.
 
 **Under-Scurriers**
 - **Clan-Squeakers**: swarm fodder armed with bent forks. They arrive in packs and trip over each other's tails.

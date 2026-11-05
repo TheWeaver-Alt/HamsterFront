@@ -15,6 +15,11 @@ var spawn_all := false
 var _spawned_all := false
 var lob_free := false
 var economy := false
+var mechs_check := false
+var _mech_stage := 0
+var _mech_frames := 0
+var _mech_failed := 0
+var _mech_rats: Array = []
 var cards_check := false
 var _cards_done := false
 var _economy_done := false
@@ -63,6 +68,11 @@ func _ready() -> void:
 		elif a.begins_with("--learning="):
 			var lv := int(a.get_slice("=", 1))
 			GameManager.learning_levels = [lv, lv]
+		elif a.begins_with("--chassis="):
+			var picks := a.get_slice("=", 1).split(",")
+			GameManager.player_chassis = [picks[0], picks[picks.size() - 1]]
+		elif a == "--mechs":
+			mechs_check = true
 		elif a == "--cards":
 			cards_check = true
 		elif a == "--economy":
@@ -121,6 +131,8 @@ func _physics_process(delta: float) -> void:
 			arena.spawn_rat(k, ArenaMap.cell_center(ArenaMap.BURROWS[0]) + Vector2(randf_range(-6, 6), 0), 1.0, 1.0)
 	if cards_check and not _cards_done:
 		_cards_check()
+	if mechs_check and _mech_stage < 3 and frame >= 30 and (not stuck or _stuck_stage == 2):
+		_mechs_step()
 	if economy and not _economy_done and frame >= 20:
 		_economy_check()
 	if economy and _economy_done and _gate_stage < 3 and (not stuck or _stuck_stage == 2):
@@ -393,6 +405,110 @@ func _cards_check() -> void:
 		print("[smoke] cards: ok (%d cards have a picture, arrows and a short name)" % CardDB.cards.size())
 
 
+## The four mechs (--mechs, ADR-0003; run it with --chassis=tank,drone): the weight ordering, flight, the hover sag,
+## the jetpack exclusion, the heat-weight rule, and that each new weapon and alt attack really hurts a rat.
+func _mech_fail(msg: String) -> void:
+	_mech_failed += 1
+	push_error("mechs: " + msg)
+
+
+func _mechs_step() -> void:
+	var tank = GameManager.players[0]
+	var drone = GameManager.players[1]
+	if _mech_stage == 0:
+		_mech_stage = 3
+		if tank.chassis != "tank" or drone.chassis != "drone":
+			_mech_fail("run this check with --chassis=tank,drone")
+			return
+		# weight: the speed lost with full cheeks, by mech (ADR-0003: tank < spider < robot < drone)
+		var slow := {}
+		for id in Chassis.IDS:
+			slow[id] = float(Chassis.def(id)["stats"]["pouch_slow"])
+		if not (slow["tank"] < slow["wheeler"] and slow["wheeler"] < slow["brawler"] and slow["brawler"] < slow["drone"]):
+			_mech_fail("the weight order should be tank < wheeler < brawler < drone, got %s" % [slow])
+		for m in [tank, drone]:
+			m.pouch.amount = int(m.pouch.capacity())
+			if absf(m.pouch.speed_mult() - (1.0 - float(slow[m.chassis]))) > 0.01:
+				_mech_fail("%s full-pouch speed should be %.2f, got %.2f" % [m.chassis, 1.0 - float(slow[m.chassis]), m.pouch.speed_mult()])
+		# the drone sags lower the fuller it is
+		var low: float = drone.visual.hover_height()
+		drone.pouch.amount = 0
+		var high: float = drone.visual.hover_height()
+		tank.pouch.amount = 0
+		if low >= high:
+			_mech_fail("a full drone should hover lower than an empty one (%.0f vs %.0f)" % [low, high])
+		# flight: the drone ignores cliffs and towers, the tank does not
+		if not drone.flies() or tank.flies():
+			_mech_fail("only the drone should fly")
+		if (drone.collision_mask & (GameManager.L_CLIFF | GameManager.L_TOWERS)) != 0:
+			_mech_fail("the drone's collision mask must leave out cliffs and towers")
+		if (tank.collision_mask & GameManager.L_CLIFF) == 0:
+			_mech_fail("the tank must be stopped by cliffs")
+		# the jetpack card never reaches the drone, and the filter is the only reason
+		var jet: Dictionary = CardDB.get_card("jetpack").duplicate()
+		drone.owned_cards.erase("jetpack")
+		if CardDB.is_eligible(jet, drone):
+			_mech_fail("the jetpack card must not be offered to the drone")
+		jet.erase("not_chassis")
+		if not CardDB.is_eligible(jet, drone):
+			_mech_fail("without not_chassis the jetpack card should be offered (the filter is the only reason)")
+		# the spider ball's rule: with heat_weight a full pouch heats the wheel faster
+		tank.stats.base["heat_weight"] = 0.8
+		tank.wheel.heat = 0.0
+		tank.wheel.tick(0.5, true)
+		var cool: float = tank.wheel.heat
+		tank.wheel.heat = 0.0
+		tank.pouch.amount = int(tank.pouch.capacity())
+		tank.wheel.tick(0.5, true)
+		var hot: float = tank.wheel.heat
+		tank.stats.base["heat_weight"] = 0.0
+		tank.pouch.amount = 0
+		tank.wheel.heat = 0.0
+		if hot < cool * 1.6:
+			_mech_fail("heat_weight 0.8 should heat a full-pouch wheel about 1.8x faster (%.1f vs %.1f)" % [hot, cool])
+		# weapons: gust and stomp act at once; shells and seed bombs need time to land
+		tank.global_position = Vector2(470, 110)
+		drone.global_position = Vector2(470, 150)
+		tank.weapon.aim = Vector2.RIGHT
+		drone.weapon.aim = Vector2.RIGHT
+		var stomp_rat = arena.spawn_rat("squeaker", tank.global_position + Vector2(20, 0), 30.0, 0.01)
+		var gust_rat = arena.spawn_rat("squeaker", drone.global_position + Vector2(30, 0), 30.0, 0.01)
+		var shell_rat = arena.spawn_rat("squeaker", tank.global_position + Vector2(95, -30), 30.0, 0.01)
+		var bomb_rat = arena.spawn_rat("squeaker", drone.global_position + Vector2(34, 40), 30.0, 0.01)
+		_mech_rats = [shell_rat, bomb_rat, stomp_rat, gust_rat]
+		_mech_frames = 0
+		_mech_stage = 1
+		return
+	_mech_frames += 1
+	# a few frames later the arena's spatial index knows the new rats: stomp and gust act at once, shell and bomb fly
+	if _mech_stage == 1 and _mech_frames >= 12:
+		var stomp_rat = _mech_rats[2]
+		var gust_rat = _mech_rats[3]
+		tank.weapon._alt()
+		if stomp_rat.hp >= stomp_rat.max_hp or stomp_rat.stun_t <= 0.0:
+			_mech_fail("the stomp should hurt and stun a rat beside the tank (hp %.1f/%.1f, stun %.2f)" % [stomp_rat.hp, stomp_rat.max_hp, stomp_rat.stun_t])
+		drone.weapon._alt()
+		if gust_rat.stun_t <= 0.0 or gust_rat.knock.length() < 1.0:
+			_mech_fail("the gust should shove and stun a rat ahead of the drone (stun %.2f, knock %.1f)" % [gust_rat.stun_t, gust_rat.knock.length()])
+		tank.weapon._fire()
+		drone.weapon.aim = Vector2(0.65, 0.76).normalized()
+		drone.weapon._fire()
+		_mech_frames = 0
+		_mech_stage = 2
+		return
+	if _mech_stage == 2 and _mech_frames >= 150:
+		if _mech_rats[0].hp >= _mech_rats[0].max_hp:
+			_mech_fail("the tank's shell should have damaged the rat it was aimed at")
+		if _mech_rats[1].hp >= _mech_rats[1].max_hp:
+			_mech_fail("the drone's seed bomb should have damaged the rat below it")
+		for r in _mech_rats:
+			if is_instance_valid(r) and r.alive:
+				r.take_damage(99999.0, r.global_position, 0.0, {"quiet": true})
+		_mech_stage = 3
+		if _mech_failed == 0:
+			print("[smoke] mechs: ok (weight order, flight, hover sag, jetpack filter, heat weight, stomp, gust, shell, seed bomb)")
+
+
 func _mortar_in_flight() -> bool:
 	for s in arena.shots.shots:
 		if s.lob and s.kind == "mortar":
@@ -415,7 +531,7 @@ func _tower_overlap(p, tw) -> float:
 func _count_embedded() -> void:
 	var now := false
 	for p in GameManager.players:
-		if not is_instance_valid(p):
+		if not is_instance_valid(p) or p.flies():
 			continue
 		for tw in arena.towers:
 			if is_instance_valid(tw) and _tower_overlap(p, tw) > 0.5:
@@ -487,6 +603,8 @@ func _stuck_run() -> void:
 func _finish() -> void:
 	if cards_check and not _cards_done:
 		push_error("cards: the check did not run")
+	if mechs_check and _mech_stage != 3:
+		_mech_fail("the check did not finish (stage %d)" % _mech_stage)
 	if economy and not _economy_done:
 		_econ_fail("the check did not run")
 	if economy and _economy_done and _gate_stage != 3:

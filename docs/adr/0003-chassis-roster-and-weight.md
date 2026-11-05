@@ -48,6 +48,7 @@ The drone flies: it ignores cliffs and towers (its collision mask leaves out `L_
 
 1. [x] `Chassis.gd` and `GameManager.player_chassis`; BRAWLER and WHEELER moved onto them with no visible change. Done 2026-11-05: 0 differing pixels between before and after captures in 6 states for both mechs, and the bots drove both through 5 waves.
 2. [x] Per-pilot selection on the title screen (left and right on each joined pilot's slot).
-3. [ ] HOWITZER-9 (art, weapons, weight).
-4. [ ] WHIRLYBIRD-Z (art, flight, weapons, weight).
-5. [ ] Bots and checks that drive all four mechs.
+3. [x] HOWITZER-9 (art, weapons, weight). Done 2026-11-05.
+4. [x] WHIRLYBIRD-Z (art, flight, weapons, weight). Done 2026-11-05.
+5. [x] Bots and checks that drive all four mechs: `--chassis=a,b` and `--mechs` in the smoke test, and a tank-and-drone run in `tools/check.sh`.
+6. [ ] Lock the tank and the drone behind the Workshop (needs the Workshop's own ADR for the save file).
